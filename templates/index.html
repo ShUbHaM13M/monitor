@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>Know when your jobs don't run.</h1>
+  <p class="muted">
+    Cron, worker and webhook heartbeats, HTTP uptime and response times,
+    with alerts by email, Slack and Discord.
+  </p>
+  <pre class="snippet"><code>0 2 * * * /usr/local/bin/backup.sh &amp;&amp; curl -fsS {{ base_url }}/p/&lt;token&gt;</code></pre>
+</section>
+
+<section class="card">
+  <h2>System status</h2>
+  <div hx-get="/partials/system-status" hx-trigger="load, every 10s" hx-swap="innerHTML">
+    <span class="muted">Checking…</span>
+  </div>
+</section>
+{% endblock %}

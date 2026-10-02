@@ -1,0 +1,93 @@
+:root {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --text: #1b1b1f;
+  --muted: #6b6b76;
+  --border: #e3e3e8;
+  --accent: #4f46e5;
+  --up: #15803d;
+  --up-bg: #dcfce7;
+  --down: #b91c1c;
+  --down-bg: #fee2e2;
+  --warn: #a16207;
+  --warn-bg: #fef9c3;
+  --radius: 8px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111114;
+    --surface: #1a1a1f;
+    --text: #ececf1;
+    --muted: #9a9aa5;
+    --border: #2c2c33;
+    --accent: #818cf8;
+    --up: #4ade80;
+    --up-bg: #14321f;
+    --down: #f87171;
+    --down-bg: #3b1515;
+    --warn: #facc15;
+    --warn-bg: #3a3210;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a { color: var(--accent); }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; text-decoration: none; color: var(--text); }
+.topbar nav { display: flex; gap: 1rem; }
+
+.container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+.hero h1 { margin: 0 0 0.5rem; font-size: 1.8rem; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-top: 1.5rem;
+}
+.card h2 { margin: 0 0 0.75rem; font-size: 1.05rem; }
+
+.muted { color: var(--muted); }
+
+.snippet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font: 13px/1.5 var(--mono);
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.pill-up { color: var(--up); background: var(--up-bg); }
+.pill-down { color: var(--down); background: var(--down-bg); }
+.pill-warn { color: var(--warn); background: var(--warn-bg); }

@@ -1,0 +1,5 @@
+{% if db_ok %}
+<span class="pill pill-up">up</span> Database reachable <span class="muted">({{ db_latency_ms }} ms)</span>
+{% else %}
+<span class="pill pill-down">down</span> Database unreachable
+{% endif %}
