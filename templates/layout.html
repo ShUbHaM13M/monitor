@@ -5,12 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Monitor{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  {# Swap 422 responses so validation errors render in place; htmx skips 4xx by default. #}
+  <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
   <script src="/static/htmx.min.js" defer></script>
 </head>
-<body>
+<body{% if !chrome.csrf.is_empty() %} hx-headers='{"X-CSRF-Token": "{{ chrome.csrf }}"}'{% endif %}>
   <header class="topbar">
     <a class="brand" href="/">◉ Monitor</a>
-    <nav>{% block nav %}{% endblock %}</nav>
+    <nav>
+      {% if let Some(user) = chrome.user %}
+        <a href="/dashboard">Dashboard</a>
+        <span class="muted">{{ user.org_name }} · {{ user.email }}</span>
+        <form method="post" action="/logout" class="inline">
+          <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+          <button type="submit" class="link">Log out</button>
+        </form>
+      {% else %}
+        <a href="/login">Log in</a>
+        <a href="/signup" class="button">Sign up</a>
+      {% endif %}
+    </nav>
   </header>
   <main class="container">
     {% block content %}{% endblock %}

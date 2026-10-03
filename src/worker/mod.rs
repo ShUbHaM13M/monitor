@@ -5,6 +5,8 @@ use sqlx::PgPool;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
+use crate::auth::session;
+
 /// Runs all background loops until `shutdown` is cancelled.
 ///
 /// Every loop claims its work from Postgres with `FOR UPDATE SKIP LOCKED`, so any
@@ -12,16 +14,17 @@ use tokio_util::sync::CancellationToken;
 pub async fn run(db: PgPool, shutdown: CancellationToken) -> anyhow::Result<()> {
     let mut tasks = JoinSet::new();
 
-    // Phase 2 replaces this with the heartbeat deadline scheduler; later phases add
-    // the HTTP prober, notifier and janitor.
     tasks.spawn(periodic(
-        "scheduler",
-        Duration::from_secs(5),
+        "sessions-cleanup",
+        Duration::from_secs(60 * 60),
         shutdown.clone(),
         move || {
             let db = db.clone();
             async move {
-                sqlx::query("SELECT 1").execute(&db).await?;
+                let deleted = session::delete_expired(&db).await?;
+                if deleted > 0 {
+                    tracing::info!(deleted, "removed expired sessions");
+                }
                 Ok(())
             }
         },

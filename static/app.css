@@ -91,3 +91,60 @@ a { color: var(--accent); }
 .pill-up { color: var(--up); background: var(--up-bg); }
 .pill-down { color: var(--down); background: var(--down-bg); }
 .pill-warn { color: var(--warn); background: var(--warn-bg); }
+
+/* ───────── buttons & forms ───────── */
+
+.button {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button:hover { filter: brightness(1.08); }
+
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+form.inline { display: inline; }
+
+.topbar nav { align-items: center; }
+
+.auth { max-width: 400px; margin: 2rem auto; }
+.auth h1 { font-size: 1.5rem; }
+
+.form { display: flex; flex-direction: column; gap: 0.9rem; }
+.form label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 600; }
+.form label .muted, .form small { font-weight: 400; }
+.form input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.form input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.form-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--down-bg);
+  color: var(--down);
+}
+
+.list { margin: 0; padding-left: 1.1rem; }
+.list li { padding: 0.15rem 0; }

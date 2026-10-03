@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+
+{% block title %}Sign up · Monitor{% endblock %}
+
+{% block content %}
+<section class="auth">
+  <h1>Create your account</h1>
+  {% include "auth/signup_form.html" %}
+  <p class="muted">Already have an account? <a href="/login">Log in</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard · Monitor{% endblock %}
+
+{% block content %}
+<h1>{{ org_name }}</h1>
+
+<section class="card">
+  <h2>Projects</h2>
+  <ul class="list">
+    {% for project in projects %}
+    <li>{{ project.name }} <span class="muted">created {{ project.created_at.format("%Y-%m-%d") }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card empty">
+  <h2>Checks</h2>
+  <p class="muted">No checks yet. Cron and heartbeat checks arrive in the next release.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,14 @@
+<form class="card form" method="post" action="/login"
+      hx-post="/login" hx-target="this" hx-swap="outerHTML">
+  {% if let Some(error) = form.error %}
+  <p class="form-error" role="alert">{{ error }}</p>
+  {% endif %}
+  <input type="hidden" name="next" value="{{ form.next }}">
+  <label>Email
+    <input type="email" name="email" value="{{ form.email }}" required autocomplete="email" autofocus>
+  </label>
+  <label>Password
+    <input type="password" name="password" required autocomplete="current-password">
+  </label>
+  <button type="submit" class="button">Log in</button>
+</form>

@@ -27,6 +27,23 @@ pub struct Config {
     pub log_format: LogFormat,
 }
 
+impl Config {
+    /// `scheme://host[:port]` of `base_url`, compared against the `Origin` header.
+    pub fn public_origin(&self) -> &str {
+        let url = self.base_url.trim_end_matches('/');
+        let after_scheme = url.find("://").map_or(0, |i| i + 3);
+        match url[after_scheme..].find('/') {
+            Some(i) => &url[..after_scheme + i],
+            None => url,
+        }
+    }
+
+    /// Mark cookies `Secure` whenever the app is served over HTTPS.
+    pub fn secure_cookies(&self) -> bool {
+        self.base_url.starts_with("https://")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum LogFormat {
     Pretty,

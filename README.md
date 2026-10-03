@@ -12,6 +12,24 @@ cargo run -- migrate          # apply migrations (also done at startup when AUTO
 cargo run                     # web + workers on http://localhost:3000
 ```
 
+Queries are checked at compile time by `sqlx::query!` against the database in `DATABASE_URL`.
+After changing a query or migration, refresh the offline metadata and commit `.sqlx/`:
+
+```sh
+cargo install sqlx-cli --no-default-features --features postgres,rustls   # once
+cargo sqlx migrate run
+cargo sqlx prepare -- --all-targets
+```
+
+Builds without a database (CI, Docker) use the committed metadata: `SQLX_OFFLINE=true cargo build`.
+
+## Tests
+
+```sh
+docker compose up -d
+cargo test      # integration tests create a throwaway database per test via #[sqlx::test]
+```
+
 ## Commands
 
 | Command | Runs |
@@ -30,6 +48,7 @@ migrations/   SQL migrations (embedded into the binary)
 templates/    askama templates; partials/ are htmx fragments
 static/       CSS and vendored htmx, embedded in release builds
 src/
+  auth/       passwords, sessions, CSRF, CurrentUser/OrgId extractors
   config.rs   CLI / env configuration
   db/         pool, migrations, queries
   web/        router, handlers, error type, static assets

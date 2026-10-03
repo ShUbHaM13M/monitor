@@ -1,3 +1,6 @@
+pub mod projects;
+pub mod users;
+
 use std::time::Duration;
 
 use sqlx::migrate::Migrator;

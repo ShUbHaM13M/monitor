@@ -1,0 +1,17 @@
+<form class="card form" method="post" action="/signup"
+      hx-post="/signup" hx-target="this" hx-swap="outerHTML">
+  {% if let Some(error) = form.error %}
+  <p class="form-error" role="alert">{{ error }}</p>
+  {% endif %}
+  <label>Email
+    <input type="email" name="email" value="{{ form.email }}" required maxlength="254" autocomplete="email" autofocus>
+  </label>
+  <label>Password
+    <input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password">
+    <small class="muted">At least 10 characters.</small>
+  </label>
+  <label>Organisation name <span class="muted">(optional)</span>
+    <input type="text" name="org_name" value="{{ form.org_name }}" maxlength="100" autocomplete="organization">
+  </label>
+  <button type="submit" class="button">Create account</button>
+</form>

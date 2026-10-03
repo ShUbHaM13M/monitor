@@ -1,15 +1,11 @@
-mod config;
-mod db;
-mod web;
-mod worker;
-
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
-use config::{Config, LogFormat};
+use monitor::config::{Config, LogFormat};
+use monitor::{db, web, worker};
 
 #[derive(Parser)]
 #[command(version, about = "Cron, heartbeat and uptime monitoring")]
