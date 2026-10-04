@@ -80,7 +80,7 @@ async fn handle(
             .map(|ua| ua.chars().take(MAX_USER_AGENT).collect()),
         body: (!body.is_empty()).then(|| tail_utf8(body, MAX_STORED_BODY)),
     };
-    if pings::record(&state.db, token, signal, meta).await? {
+    if pings::record(&state.db, &state.config.base_url, token, signal, meta).await? {
         Ok((StatusCode::OK, "OK\n").into_response())
     } else {
         // Tokens are 128-bit random values, so a 404 can't be used to enumerate

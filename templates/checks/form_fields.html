@@ -72,5 +72,17 @@
     <small class="muted">If the job pings <code>/start</code>, it goes down when it hasn't finished within this time.</small>
   </label>
 
+  <fieldset class="choice stacked">
+    <legend>Alert channels</legend>
+    {% for channel in form.channels %}
+    <label class="radio">
+      <input type="checkbox" name="channel_ids" value="{{ channel.id }}" {% if channel.checked %}checked{% endif %}>
+      {{ channel.name }} <span class="muted">{{ channel.kind }}{% if !channel.verified %} · awaiting confirmation{% endif %}</span>
+    </label>
+    {% else %}
+    <p class="muted">No channels yet. <a href="/channels/new">Add one</a> to get alerted when this check goes down.</p>
+    {% endfor %}
+  </fieldset>
+
   <button type="submit" class="button">{{ form.submit }}</button>
 </form>

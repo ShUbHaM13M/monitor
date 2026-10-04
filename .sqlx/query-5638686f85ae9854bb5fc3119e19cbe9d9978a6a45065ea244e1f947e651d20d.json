@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notifications SET status = 'sent', sent_at = now(), last_error = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5638686f85ae9854bb5fc3119e19cbe9d9978a6a45065ea244e1f947e651d20d"
+}

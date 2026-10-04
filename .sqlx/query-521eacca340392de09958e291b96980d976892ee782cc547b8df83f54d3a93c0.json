@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH due AS (\n               SELECT id FROM notifications\n               WHERE status IN ('pending', 'sending') AND next_attempt_at <= now()\n               ORDER BY next_attempt_at\n               LIMIT $1\n               FOR UPDATE SKIP LOCKED\n           )\n           UPDATE notifications n\n           SET status = 'sending', attempts = n.attempts + 1,\n               next_attempt_at = now() + make_interval(secs => $2)\n           FROM due, channels ch\n           WHERE n.id = due.id AND ch.id = n.channel_id\n           RETURNING n.id, n.attempts, n.payload, ch.kind AS channel_kind, ch.config_enc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notifications",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "attempts",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "notifications",
+            "name": "attempts"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "notifications",
+            "name": "payload"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "config_enc",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "config_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "521eacca340392de09958e291b96980d976892ee782cc547b8df83f54d3a93c0"
+}

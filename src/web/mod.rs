@@ -1,5 +1,6 @@
 mod assets;
 mod auth;
+mod channels;
 mod checks;
 mod error;
 mod ingest;
@@ -23,6 +24,8 @@ use tower_http::trace::TraceLayer;
 
 use crate::auth::CurrentUser;
 use crate::config::Config;
+use crate::crypto::SecretBox;
+use crate::notify::Registry;
 
 pub use error::AppError;
 
@@ -30,6 +33,19 @@ pub use error::AppError;
 pub struct AppState {
     pub db: PgPool,
     pub config: Arc<Config>,
+    pub channels: Arc<Registry>,
+    pub secrets: Arc<SecretBox>,
+}
+
+impl AppState {
+    pub fn new(db: PgPool, config: Arc<Config>) -> anyhow::Result<Self> {
+        Ok(Self {
+            secrets: Arc::new(SecretBox::from_base64(&config.secret_key)?),
+            channels: Arc::new(Registry::from_config(&config)?),
+            db,
+            config,
+        })
+    }
 }
 
 pub fn router(state: AppState) -> Router {
@@ -46,6 +62,20 @@ pub fn router(state: AppState) -> Router {
         .route("/checks/{id}/pause", post(checks::pause))
         .route("/checks/{id}/resume", post(checks::resume))
         .route("/checks/{id}/delete", post(checks::delete))
+        .route("/channels", get(channels::list))
+        .route("/channels/new", get(channels::new_picker))
+        .route(
+            "/channels/new/{kind}",
+            get(channels::new_form).post(channels::create),
+        )
+        .route("/channels/{id}", get(channels::show))
+        .route("/channels/{id}/test", post(channels::test))
+        .route("/channels/{id}/resend", post(channels::resend))
+        .route("/channels/{id}/delete", post(channels::delete))
+        .route(
+            "/verify-channel",
+            get(channels::verify_page).post(channels::verify_confirm),
+        )
         .route("/signup", get(auth::signup_page).post(auth::signup))
         .route("/login", get(auth::login_page).post(auth::login))
         .route("/logout", post(auth::logout))

@@ -5,10 +5,12 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::checks::{CheckStatus, deadlines};
-use super::incidents;
+use super::{incidents, notifications};
 use crate::auth::OrgId;
 use crate::domain::ping::{Outcome, Signal};
 use crate::domain::schedule::Schedule;
+use crate::notify::alert::log_tail;
+use crate::notify::{Alert, AlertEvent};
 
 pub struct Ping {
     pub id: i64,
@@ -55,6 +57,7 @@ pub struct PingMeta {
 /// Returns `false` for an unknown token.
 pub async fn record(
     db: &PgPool,
+    base_url: &str,
     token: &str,
     signal: Signal,
     meta: PingMeta,
@@ -63,7 +66,7 @@ pub async fn record(
     // The row lock serialises concurrent pings for one check, and makes the
     // scheduler (FOR UPDATE SKIP LOCKED) skip this check until we commit.
     let check = sqlx::query!(
-        r#"SELECT id, org_id, status AS "status: CheckStatus", schedule_kind, cron_expr, tz,
+        r#"SELECT id, org_id, name, status AS "status: CheckStatus", schedule_kind, cron_expr, tz,
                   period_secs, grace_secs, max_runtime_secs, last_start_at, alert_after,
                   now() AS "now!"
            FROM checks WHERE token = $1 FOR UPDATE"#,
@@ -92,7 +95,7 @@ pub async fn record(
         duration_ms,
         meta.source_ip.map(|ip| ip.to_string()),
         meta.user_agent,
-        meta.body,
+        meta.body.as_deref(),
         now,
     )
     .fetch_one(&mut *tx)
@@ -149,13 +152,18 @@ pub async fn record(
             .await?;
 
             if outcome == Outcome::Succeeded {
-                incidents::resolve_for_check(&mut tx, check.id).await?;
+                if let Some(resolved) = incidents::resolve_for_check(&mut tx, check.id).await? {
+                    let mut alert = Alert::new(AlertEvent::Up, check.id, &check.name, base_url);
+                    alert.occurred_at = now;
+                    alert.down_since = Some(resolved.started_at);
+                    notifications::enqueue_recovery(&mut tx, resolved.id, &alert).await?;
+                }
             } else {
                 let detail = match signal {
                     Signal::Exit(code) => format!("Job exited with code {code}."),
                     _ => "Job reported a failure.".to_owned(),
                 };
-                incidents::open_for_check(
+                let opened = incidents::open_for_check(
                     &mut tx,
                     check.org_id,
                     check.id,
@@ -164,6 +172,15 @@ pub async fn record(
                     Some(ping_id),
                 )
                 .await?;
+                if let Some(incident_id) = opened {
+                    let mut alert = Alert::new(AlertEvent::Fail, check.id, &check.name, base_url);
+                    alert.occurred_at = now;
+                    alert.reason = Some("Job failed".into());
+                    alert.detail = Some(detail);
+                    alert.log_tail = meta.body.as_deref().map(log_tail).filter(|t| !t.is_empty());
+                    notifications::enqueue_for_check(&mut tx, incident_id, check.id, &alert)
+                        .await?;
+                }
             }
         }
     }

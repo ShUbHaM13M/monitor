@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE channels SET verified_at = now(), verify_token_hash = NULL\n         WHERE verify_token_hash = $1 AND verified_at IS NULL\n           AND verify_sent_at > now() - make_interval(days => $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dd2bd2cbc324430fc27d642d019938b8398566b78fc0a2fbf944208008436446"
+}

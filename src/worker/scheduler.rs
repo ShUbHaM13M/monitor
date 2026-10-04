@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 use crate::db::checks::CheckStatus;
-use crate::db::incidents;
+use crate::db::{incidents, notifications};
+use crate::notify::{Alert, AlertEvent};
 
 const BATCH: i64 = 100;
 
@@ -12,12 +13,12 @@ const BATCH: i64 = 100;
 /// Rows are claimed with `FOR UPDATE SKIP LOCKED`, so several workers can run this
 /// at once, and a check being pinged right now (row locked by ingest) is skipped
 /// and re-evaluated on the next tick.
-pub async fn tick(db: &PgPool) -> anyhow::Result<u64> {
+pub async fn tick(db: &PgPool, base_url: &str) -> anyhow::Result<u64> {
     let mut total = 0;
     loop {
         let mut tx = db.begin().await?;
         let due = sqlx::query!(
-            r#"SELECT id, org_id, status AS "status: CheckStatus", next_expected_at,
+            r#"SELECT id, org_id, name, status AS "status: CheckStatus", next_expected_at,
                       last_ping_at, last_start_at
                FROM checks
                WHERE status IN ('up', 'started') AND alert_after <= now()
@@ -41,9 +42,10 @@ pub async fn tick(db: &PgPool) -> anyhow::Result<u64> {
         .await?;
 
         for check in &due {
-            let (reason, detail) = if check.status == CheckStatus::Started {
+            let (reason, label, detail) = if check.status == CheckStatus::Started {
                 (
                     "hung",
+                    "Run never finished",
                     format!(
                         "Run started {} and did not finish in time.",
                         fmt_time(check.last_start_at)
@@ -52,6 +54,7 @@ pub async fn tick(db: &PgPool) -> anyhow::Result<u64> {
             } else {
                 (
                     "missed",
+                    "Missed ping",
                     format!(
                         "Expected a ping by {}. Last ping {}.",
                         fmt_time(check.next_expected_at),
@@ -59,8 +62,15 @@ pub async fn tick(db: &PgPool) -> anyhow::Result<u64> {
                     ),
                 )
             };
-            incidents::open_for_check(&mut tx, check.org_id, check.id, reason, &detail, None)
-                .await?;
+            let opened =
+                incidents::open_for_check(&mut tx, check.org_id, check.id, reason, &detail, None)
+                    .await?;
+            if let Some(incident_id) = opened {
+                let mut alert = Alert::new(AlertEvent::Down, check.id, &check.name, base_url);
+                alert.reason = Some(label.into());
+                alert.detail = Some(detail);
+                notifications::enqueue_for_check(&mut tx, incident_id, check.id, &alert).await?;
+            }
         }
         tx.commit().await?;
 

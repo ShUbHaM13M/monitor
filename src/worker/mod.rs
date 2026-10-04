@@ -1,32 +1,49 @@
+pub mod notifier;
 pub mod scheduler;
 
 use std::future::Future;
 use std::time::Duration;
 
-use sqlx::PgPool;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::auth::session;
+use crate::web::AppState;
 
 /// Runs all background loops until `shutdown` is cancelled.
 ///
 /// Every loop claims its work from Postgres with `FOR UPDATE SKIP LOCKED`, so any
 /// number of worker processes can run side by side.
-pub async fn run(db: PgPool, shutdown: CancellationToken) -> anyhow::Result<()> {
+pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result<()> {
     let mut tasks = JoinSet::new();
 
-    let scheduler_db = db.clone();
+    let st = state.clone();
     tasks.spawn(periodic(
         "scheduler",
         Duration::from_secs(5),
         shutdown.clone(),
         move || {
-            let db = scheduler_db.clone();
-            async move { scheduler::tick(&db).await.map(drop) }
+            let st = st.clone();
+            async move { scheduler::tick(&st.db, &st.config.base_url).await.map(drop) }
         },
     ));
 
+    let st = state.clone();
+    tasks.spawn(periodic(
+        "notifier",
+        Duration::from_secs(2),
+        shutdown.clone(),
+        move || {
+            let st = st.clone();
+            async move {
+                notifier::tick(&st.db, &st.channels, &st.secrets)
+                    .await
+                    .map(drop)
+            }
+        },
+    ));
+
+    let db = state.db.clone();
     tasks.spawn(periodic(
         "sessions-cleanup",
         Duration::from_secs(60 * 60),

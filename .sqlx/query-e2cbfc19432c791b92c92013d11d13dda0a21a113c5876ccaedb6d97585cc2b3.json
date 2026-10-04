@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM check_channels\n         WHERE check_id = $1 AND org_id = $2 AND NOT (channel_id = ANY($3))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2cbfc19432c791b92c92013d11d13dda0a21a113c5876ccaedb6d97585cc2b3"
+}

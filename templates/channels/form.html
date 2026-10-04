@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+
+{% block title %}New {{ form.kind_label }} channel · Monitor{% endblock %}
+
+{% block content %}
+<section class="narrow">
+  <p class="muted"><a href="/channels/new">← Channel types</a></p>
+  <h1>New {{ form.kind_label }} channel</h1>
+  {% include "channels/form_fields.html" %}
+</section>
+{% endblock %}

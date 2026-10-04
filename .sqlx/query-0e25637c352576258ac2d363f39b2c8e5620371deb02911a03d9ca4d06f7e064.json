@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notifications (incident_id, channel_id, event, payload)\n         SELECT DISTINCT $1::uuid, channel_id, $2, $3::jsonb\n         FROM notifications\n         WHERE incident_id = $1 AND event IN ('down', 'fail')\n         ON CONFLICT (incident_id, channel_id, event) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e25637c352576258ac2d363f39b2c8e5620371deb02911a03d9ca4d06f7e064"
+}

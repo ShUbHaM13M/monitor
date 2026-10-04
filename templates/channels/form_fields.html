@@ -1,0 +1,27 @@
+{# Rendered from the channel kind's field list, so new kinds need no template. #}
+<form class="card form" method="post" action="/channels/new/{{ form.kind_id }}"
+      hx-post="/channels/new/{{ form.kind_id }}" hx-target="this" hx-swap="outerHTML">
+  {% if let Some(error) = form.error %}
+  <p class="form-error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  {% for field in form.fields %}
+  <label><span>{{ field.label }}{% if !field.required %} <span class="muted">(optional)</span>{% endif %}</span>
+    <input type="{{ field.html_type }}" name="{{ field.name }}" value="{{ field.value }}"
+           placeholder="{{ field.placeholder }}" {% if field.required %}required{% endif %}
+           autocomplete="off">
+    {% if !field.help.is_empty() %}<small class="muted">{{ field.help }}</small>{% endif %}
+  </label>
+  {% endfor %}
+
+  <label><span>Name <span class="muted">(optional)</span></span>
+    <input type="text" name="channel_name" value="{{ form.name }}" maxlength="100" placeholder="Defaults to the destination">
+  </label>
+
+  <label class="radio">
+    <input type="checkbox" name="attach_all" value="on" {% if form.attach_all %}checked{% endif %}>
+    Use for all existing checks
+  </label>
+
+  <button type="submit" class="button">Add channel</button>
+</form>

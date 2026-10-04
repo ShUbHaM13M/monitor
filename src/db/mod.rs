@@ -1,5 +1,7 @@
+pub mod channels;
 pub mod checks;
 pub mod incidents;
+pub mod notifications;
 pub mod pings;
 pub mod users;
 

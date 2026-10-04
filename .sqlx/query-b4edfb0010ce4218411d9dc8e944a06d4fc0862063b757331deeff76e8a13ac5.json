@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ch.id, ch.kind, ch.config_enc, o.name AS org_name\n         FROM channels ch JOIN orgs o ON o.id = ch.org_id\n         WHERE ch.verify_token_hash = $1 AND ch.verified_at IS NULL\n           AND ch.verify_sent_at > now() - make_interval(days => $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "config_enc",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "config_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "org_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "orgs",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b4edfb0010ce4218411d9dc8e944a06d4fc0862063b757331deeff76e8a13ac5"
+}

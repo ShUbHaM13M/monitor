@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO check_channels (check_id, channel_id, org_id)\n             SELECT c.id, $1, c.org_id FROM checks c WHERE c.org_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee6a3a7e1062aa8ea857371c0aa2bc4d43c47325612314483b4693869e653ac0"
+}

@@ -7,18 +7,25 @@ edition = "2024"
 anyhow = "1.0.104"
 argon2 = "0.6.0"
 askama = "0.16.1"
+async-trait = "0.1.92"
 axum = "0.8.9"
-axum-extra = { version = "0.12.6", features = ["cookie"] }
+axum-extra = { version = "0.12.6", features = ["cookie", "form", "query"] }
 base64 = "0.23.1"
+chacha20poly1305 = "0.11"
 chrono = { version = "0.4.45", features = ["serde"] }
 chrono-tz = "0.10"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 croner = "4"
 dotenvy = "0.15.7"
 form_urlencoded = "1.2.2"
+futures = "0.3.34"
+hmac = "0.13.0"
+lettre = { version = "0.11.23", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "hostname", "pool"] }
 rand = "0.10.3"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 rust-embed = { version = "8.12.0", features = ["mime-guess"] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 sha2 = "0.11.0"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "chrono", "uuid", "json"] }
 subtle = "2.6.1"
@@ -29,11 +36,13 @@ tokio-util = { version = "0.7.19", features = ["rt"] }
 tower-http = { version = "0.7.1", features = ["trace", "compression-gzip", "timeout", "request-id", "util"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+url = "2.5.8"
 uuid = { version = "1.26.1", features = ["v7", "serde"] }
 
 [dev-dependencies]
 http-body-util = "0.1.5"
 tower = { version = "0.5.3", features = ["util"] }
+wiremock = "0.6.5"
 
 # Password hashing is deliberately slow; unoptimised it makes dev logins and tests crawl.
 [profile.dev.package.argon2]

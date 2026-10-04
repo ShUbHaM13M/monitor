@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 use monitor::config::{Config, LogFormat};
+use monitor::crypto::SecretBox;
 use monitor::{db, web, worker};
 
 #[derive(Parser)]
@@ -27,11 +28,18 @@ enum Command {
     All,
     /// Apply pending database migrations and exit.
     Migrate,
+    /// Print a new random SECRET_KEY and exit.
+    GenKey,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+    // Handled before parsing: generating the first key must not require one.
+    if std::env::args().nth(1).as_deref() == Some("gen-key") {
+        println!("{}", SecretBox::generate_key());
+        return Ok(());
+    }
     let cli = Cli::parse();
     init_tracing(cli.config.log_format);
 
@@ -51,17 +59,15 @@ async fn main() -> anyhow::Result<()> {
     let shutdown = CancellationToken::new();
     tokio::spawn(cancel_on_signal(shutdown.clone()));
 
-    let state = web::AppState {
-        db: db.clone(),
-        config,
-    };
+    let state = web::AppState::new(db, config)?;
     match command {
         Command::Serve => web::serve(state, shutdown).await?,
-        Command::Worker => worker::run(db, shutdown).await?,
+        Command::Worker => worker::run(state, shutdown).await?,
         Command::All => {
             // If either half fails, stop the other so the process exits as a whole.
             let web = {
                 let shutdown = shutdown.clone();
+                let state = state.clone();
                 async move {
                     let res = web::serve(state, shutdown.clone()).await;
                     shutdown.cancel();
@@ -71,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
             let worker = {
                 let shutdown = shutdown.clone();
                 async move {
-                    let res = worker::run(db, shutdown.clone()).await;
+                    let res = worker::run(state, shutdown.clone()).await;
                     shutdown.cancel();
                     res
                 }
@@ -80,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
             web_res?;
             worker_res?;
         }
-        Command::Migrate => unreachable!(),
+        Command::Migrate | Command::GenKey => unreachable!(),
     }
     Ok(())
 }

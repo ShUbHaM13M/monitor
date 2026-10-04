@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE channels SET verify_token_hash = $3, verify_sent_at = now()\n         WHERE id = $1 AND org_id = $2 AND verified_at IS NULL\n           AND (verify_sent_at IS NULL OR verify_sent_at < now() - make_interval(secs => $4))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bytea",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52b52c93fabca674d17b626681cab62610f0cc18f55445ec8c516ff931453744"
+}

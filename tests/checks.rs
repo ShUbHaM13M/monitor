@@ -410,11 +410,11 @@ async fn scheduler_marks_overdue_checks_down_once(db: PgPool) {
     )
     .await;
     // Not overdue yet: nothing happens.
-    assert_eq!(scheduler::tick(&db).await.unwrap(), 0);
+    assert_eq!(scheduler::tick(&db, ORIGIN).await.unwrap(), 0);
 
     set_overdue(&db, quiet).await;
     set_overdue(&db, stuck).await;
-    assert_eq!(scheduler::tick(&db).await.unwrap(), 2);
+    assert_eq!(scheduler::tick(&db, ORIGIN).await.unwrap(), 2);
     assert_eq!(status_of(&db, quiet).await, "down");
     assert_eq!(status_of(&db, stuck).await, "down");
 
@@ -429,7 +429,7 @@ async fn scheduler_marks_overdue_checks_down_once(db: PgPool) {
     );
 
     // Already down: a second tick is a no-op.
-    assert_eq!(scheduler::tick(&db).await.unwrap(), 0);
+    assert_eq!(scheduler::tick(&db, ORIGIN).await.unwrap(), 0);
     assert_eq!(count(&db, "SELECT count(*) FROM incidents").await, 2);
 
     // The next ping brings it back up and closes the incident.
@@ -449,7 +449,7 @@ async fn scheduler_marks_overdue_checks_down_once(db: PgPool) {
 async fn scheduler_ignores_new_and_paused_checks(db: PgPool) {
     let (app, cookie, id, _) = setup(&db).await;
     set_overdue(&db, id).await; // status 'new'
-    assert_eq!(scheduler::tick(&db).await.unwrap(), 0);
+    assert_eq!(scheduler::tick(&db, ORIGIN).await.unwrap(), 0);
 
     let csrf = csrf_token(&app, &cookie).await;
     send(
@@ -462,7 +462,7 @@ async fn scheduler_ignores_new_and_paused_checks(db: PgPool) {
     )
     .await;
     set_overdue(&db, id).await;
-    assert_eq!(scheduler::tick(&db).await.unwrap(), 0);
+    assert_eq!(scheduler::tick(&db, ORIGIN).await.unwrap(), 0);
     assert_eq!(count(&db, "SELECT count(*) FROM incidents").await, 0);
 }
 
@@ -480,9 +480,9 @@ async fn concurrent_schedulers_open_one_incident_per_check(db: PgPool) {
         .unwrap();
 
     let (a, b, c) = tokio::join!(
-        scheduler::tick(&db),
-        scheduler::tick(&db),
-        scheduler::tick(&db)
+        scheduler::tick(&db, ORIGIN),
+        scheduler::tick(&db, ORIGIN),
+        scheduler::tick(&db, ORIGIN)
     );
     assert_eq!(a.unwrap() + b.unwrap() + c.unwrap(), 25);
     assert_eq!(count(&db, "SELECT count(*) FROM incidents").await, 25);

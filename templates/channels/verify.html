@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block title %}Confirm alerts · Monitor{% endblock %}
+
+{% block content %}
+<section class="auth">
+  {% match state %}
+  {% when VerifyState::Confirm with { token, org_name, summary } %}
+  <h1>Confirm alerts</h1>
+  <form class="card form" method="post" action="/verify-channel">
+    <p><strong>{{ org_name }}</strong> wants to send uptime and cron alerts to <strong>{{ summary }}</strong>.</p>
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+    <button type="submit" class="button">Yes, send me alerts</button>
+  </form>
+  <p class="muted">Not expecting this? Close this page and nothing will be sent.</p>
+  {% when VerifyState::Done %}
+  <h1>You're all set</h1>
+  <p>Alerts will now be delivered here.</p>
+  {% when VerifyState::Invalid %}
+  <h1>Link expired</h1>
+  <p class="muted">This confirmation link is invalid, already used or more than 7 days old. Ask for a new one from the channel's page.</p>
+  {% endmatch %}
+</section>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+
+{% block title %}Add channel · Monitor{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="/channels">← Channels</a></p>
+<h1>Add a channel</h1>
+<div class="kind-grid">
+  {% for kind in kinds %}
+  <a class="card kind" href="/channels/new/{{ kind.id }}">
+    <strong>{{ kind.label }}</strong>
+    <span class="muted">{{ kind.description }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

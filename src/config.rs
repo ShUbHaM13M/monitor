@@ -25,6 +25,24 @@ pub struct Config {
 
     #[arg(long, env = "LOG_FORMAT", value_enum, default_value_t = LogFormat::Pretty)]
     pub log_format: LogFormat,
+
+    /// Base64-encoded 32-byte key for encrypting channel secrets.
+    /// Generate one with `monitor gen-key`.
+    #[arg(long, env = "SECRET_KEY", hide_env_values = true)]
+    pub secret_key: String,
+
+    /// SMTP server for email alerts, e.g. `smtp://localhost:1025` or
+    /// `smtps://user:pass@smtp.example.com`. Email channels are unavailable without it.
+    #[arg(long, env = "SMTP_URL", hide_env_values = true)]
+    pub smtp_url: Option<String>,
+
+    #[arg(long, env = "SMTP_FROM", default_value = "Monitor <alerts@localhost>")]
+    pub smtp_from: String,
+
+    /// Let webhook channels (and later HTTP monitors) reach private and loopback
+    /// addresses. Only for development: in production it allows SSRF.
+    #[arg(long, env = "ALLOW_PRIVATE_TARGETS", default_value_t = false)]
+    pub allow_private_targets: bool,
 }
 
 impl Config {

@@ -261,16 +261,7 @@ fn safe_next(next: &str) -> &str {
 }
 
 fn validate_email(email: &str) -> Option<&'static str> {
-    let valid = email.len() <= 254
-        && !email.chars().any(char::is_whitespace)
-        && email.split_once('@').is_some_and(|(local, domain)| {
-            !local.is_empty()
-                && domain.contains('.')
-                && !domain.starts_with('.')
-                && !domain.ends_with('.')
-                && !domain.contains('@')
-        });
-    (!valid).then_some("Enter a valid email address.")
+    (!crate::domain::email::is_valid(email)).then_some("Enter a valid email address.")
 }
 
 fn validate_password(password: &str) -> Option<&'static str> {
@@ -301,23 +292,6 @@ mod tests {
         assert_eq!(safe_next("https://evil.com"), AFTER_LOGIN);
         assert_eq!(safe_next("/ok\r\nSet-Cookie: x"), AFTER_LOGIN);
         assert_eq!(safe_next(""), AFTER_LOGIN);
-    }
-
-    #[test]
-    fn email_validation() {
-        assert!(validate_email("ops@example.com").is_none());
-        for bad in [
-            "",
-            "ops",
-            "ops@",
-            "@example.com",
-            "ops@example",
-            "o ps@example.com",
-            "a@b@c.com",
-            "ops@.com",
-        ] {
-            assert!(validate_email(bad).is_some(), "{bad:?} should be rejected");
-        }
     }
 
     #[test]

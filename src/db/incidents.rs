@@ -13,7 +13,7 @@ pub struct Incident {
 }
 
 /// Opens an incident for a check unless one is already open.
-/// Returns whether a new incident was created.
+/// Returns the new incident's id, or `None` if one was already open.
 pub async fn open_for_check(
     conn: &mut PgConnection,
     org_id: Uuid,
@@ -21,11 +21,12 @@ pub async fn open_for_check(
     reason: &str,
     detail: &str,
     cause_ping_id: Option<i64>,
-) -> sqlx::Result<bool> {
-    let res = sqlx::query!(
+) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar!(
         "INSERT INTO incidents (id, org_id, check_id, reason, detail, cause_ping_id)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (check_id) WHERE resolved_at IS NULL DO NOTHING",
+         ON CONFLICT (check_id) WHERE resolved_at IS NULL DO NOTHING
+         RETURNING id",
         Uuid::now_v7(),
         org_id,
         check_id,
@@ -33,21 +34,29 @@ pub async fn open_for_check(
         detail,
         cause_ping_id,
     )
-    .execute(conn)
-    .await?;
-    Ok(res.rows_affected() == 1)
+    .fetch_optional(conn)
+    .await
 }
 
-/// Resolves the check's open incident, if any. Returns whether one was resolved.
-pub async fn resolve_for_check(conn: &mut PgConnection, check_id: Uuid) -> sqlx::Result<bool> {
-    let res = sqlx::query!(
+pub struct Resolved {
+    pub id: Uuid,
+    pub started_at: DateTime<Utc>,
+}
+
+/// Resolves the check's open incident, if any.
+pub async fn resolve_for_check(
+    conn: &mut PgConnection,
+    check_id: Uuid,
+) -> sqlx::Result<Option<Resolved>> {
+    sqlx::query_as!(
+        Resolved,
         "UPDATE incidents SET resolved_at = now()
-         WHERE check_id = $1 AND resolved_at IS NULL",
+         WHERE check_id = $1 AND resolved_at IS NULL
+         RETURNING id, started_at",
         check_id,
     )
-    .execute(conn)
-    .await?;
-    Ok(res.rows_affected() == 1)
+    .fetch_optional(conn)
+    .await
 }
 
 pub async fn recent_for_check(

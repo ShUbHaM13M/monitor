@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+
+{% block title %}Channels · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Alert channels</h1>
+  <a href="/channels/new" class="button">Add channel</a>
+</div>
+
+{% if rows.is_empty() %}
+<section class="card empty">
+  <h2>No channels yet</h2>
+  <p class="muted">Add a channel to hear about it when a check goes down, fails or recovers.</p>
+  <a href="/channels/new" class="button">Add your first channel</a>
+</section>
+{% else %}
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Type</th><th>Destination</th><th>Checks</th><th>Last alert</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>
+        <a href="/channels/{{ row.id }}">{{ row.name }}</a>
+        {% if !row.verified %}<span class="pill pill-warn">awaiting confirmation</span>{% endif %}
+      </td>
+      <td>{{ row.kind }}</td>
+      <td class="mono">{{ row.summary }}</td>
+      <td>{{ row.check_count }}</td>
+      <td class="muted">{% if let Some(last) = row.last_delivery %}{{ last }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

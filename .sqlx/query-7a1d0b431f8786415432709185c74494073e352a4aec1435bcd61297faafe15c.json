@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notifications\n         SET status = 'pending', next_attempt_at = now() + make_interval(secs => $2), last_error = $3\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a1d0b431f8786415432709185c74494073e352a4aec1435bcd61297faafe15c"
+}

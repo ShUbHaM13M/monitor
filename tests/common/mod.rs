@@ -15,19 +15,38 @@ use tower::ServiceExt;
 pub const ORIGIN: &str = "http://localhost:3000";
 pub const PASSWORD: &str = "correct horse battery";
 
-pub fn app(db: PgPool) -> Router {
-    let config = Config {
+/// Fixed key so tests are reproducible; never used outside tests.
+pub const TEST_SECRET_KEY: &str = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+/// Mailpit from docker-compose.
+pub const SMTP_URL: &str = "smtp://localhost:1025";
+pub const MAILPIT_API: &str = "http://localhost:8025/api/v1";
+
+pub fn test_config() -> Config {
+    Config {
         database_url: String::new(),
         db_max_connections: 1,
         bind_addr: "127.0.0.1:0".parse().unwrap(),
         base_url: ORIGIN.into(),
         auto_migrate: false,
         log_format: LogFormat::Pretty,
-    };
-    web::router(AppState {
-        db,
-        config: Arc::new(config),
-    })
+        secret_key: TEST_SECRET_KEY.into(),
+        smtp_url: Some(SMTP_URL.into()),
+        smtp_from: "Monitor <alerts@monitor.test>".into(),
+        // Webhook tests target a local wiremock server.
+        allow_private_targets: true,
+    }
+}
+
+pub fn state_with(db: PgPool, config: Config) -> AppState {
+    AppState::new(db, Arc::new(config)).unwrap()
+}
+
+pub fn state(db: PgPool) -> AppState {
+    state_with(db, test_config())
+}
+
+pub fn app(db: PgPool) -> Router {
+    web::router(state(db))
 }
 
 pub struct Resp {

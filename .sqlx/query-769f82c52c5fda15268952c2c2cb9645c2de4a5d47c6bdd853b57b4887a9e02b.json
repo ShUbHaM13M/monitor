@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ch.id, ch.kind, ch.name, ch.config_enc, ch.verified_at, ch.created_at,\n                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id) AS \"check_count!\",\n                  last.status AS \"last_status?\", last.created_at AS \"last_at?\"\n           FROM channels ch\n           LEFT JOIN LATERAL (\n               SELECT status, created_at FROM notifications n\n               WHERE n.channel_id = ch.id\n               ORDER BY created_at DESC LIMIT 1\n           ) last ON true\n           WHERE ch.org_id = $1\n           ORDER BY ch.created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "config_enc",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "config_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "verified_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "verified_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "channels",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "check_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_status?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notifications",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "last_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "notifications",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "769f82c52c5fda15268952c2c2cb9645c2de4a5d47c6bdd853b57b4887a9e02b"
+}

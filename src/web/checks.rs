@@ -1,8 +1,8 @@
 use askama::Template;
-use axum::Form;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
+use axum_extra::extract::{Form, Query};
 use chrono::{DateTime, Utc};
 use chrono_tz::{TZ_VARIANTS, Tz};
 use serde::Deserialize;
@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::{AppError, AppState, Chrome, is_htmx, redirect};
 use crate::auth::CurrentUser;
+use crate::db::channels;
 use crate::db::checks::{self, Check, CheckSpec, CheckStatus};
 use crate::db::incidents::{self, Incident};
 use crate::db::pings::{self, Ping};
@@ -109,17 +110,56 @@ pub struct CheckInput {
     grace_value: String,
     grace_unit: String,
     max_runtime_minutes: String,
+    /// Repeated key, one per ticked checkbox (hence `axum_extra`'s `Form`/`Query`).
+    channel_ids: Vec<String>,
 }
 
 struct FormView {
     action: String,
     submit: &'static str,
     input: CheckInput,
+    channels: Vec<ChannelChoice>,
     error: Option<String>,
 }
 
+struct ChannelChoice {
+    id: Uuid,
+    name: String,
+    kind: String,
+    verified: bool,
+    checked: bool,
+}
+
+/// The org's channels as checkboxes. `selected: None` ticks them all (new checks
+/// alert everywhere by default).
+async fn channel_choices(
+    state: &AppState,
+    user: &CurrentUser,
+    selected: Option<&[Uuid]>,
+) -> Result<Vec<ChannelChoice>, AppError> {
+    Ok(channels::options(&state.db, user.org)
+        .await?
+        .into_iter()
+        .map(|c| ChannelChoice {
+            checked: selected.is_none_or(|ids| ids.contains(&c.id)),
+            kind: state.channels.label(&c.kind),
+            id: c.id,
+            name: c.name,
+            verified: c.verified,
+        })
+        .collect())
+}
+
+fn selected_ids(input: &CheckInput) -> Vec<Uuid> {
+    input
+        .channel_ids
+        .iter()
+        .filter_map(|id| id.parse().ok())
+        .collect()
+}
+
 impl FormView {
-    fn blank() -> Self {
+    fn blank(channels: Vec<ChannelChoice>) -> Self {
         Self {
             action: "/checks".into(),
             submit: "Create check",
@@ -133,11 +173,12 @@ impl FormView {
                 grace_unit: "hours".into(),
                 ..Default::default()
             },
+            channels,
             error: None,
         }
     }
 
-    fn from_check(check: &Check) -> Self {
+    fn from_check(check: &Check, channels: Vec<ChannelChoice>) -> Self {
         let (period_value, period_unit) = split_span(check.period_secs.map_or(86_400, i64::from));
         let (grace_value, grace_unit) = split_span(check.grace_secs.into());
         Self {
@@ -159,7 +200,9 @@ impl FormView {
                     .max_runtime_secs
                     .map(|s| (s / 60).to_string())
                     .unwrap_or_default(),
+                channel_ids: Vec::new(),
             },
+            channels,
             error: None,
         }
     }
@@ -181,11 +224,14 @@ struct FormPartial {
     timezones: &'static [Tz],
 }
 
-pub async fn new_page(user: CurrentUser) -> Result<Html<String>, AppError> {
+pub async fn new_page(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Html<String>, AppError> {
     let page = FormPage {
         chrome: Chrome::signed_in(&user),
         title: "New check",
-        form: FormView::blank(),
+        form: FormView::blank(channel_choices(&state, &user, None).await?),
         timezones: &TZ_VARIANTS,
     };
     Ok(Html(page.render()?))
@@ -203,7 +249,8 @@ pub async fn create(
             Ok(redirect(&headers, &format!("/checks/{id}")))
         }
         Err(error) => {
-            let mut form = FormView::blank();
+            let selected = selected_ids(&input);
+            let mut form = FormView::blank(channel_choices(&state, &user, Some(&selected)).await?);
             form.input = input;
             form.error = Some(error);
             form_error(&headers, &user, "New check", form)
@@ -219,10 +266,14 @@ pub async fn edit_page(
     let check = checks::get(&state.db, user.org, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    let selected = channels::ids_for_check(&state.db, user.org, id).await?;
     let page = FormPage {
         chrome: Chrome::signed_in(&user),
         title: "Edit check",
-        form: FormView::from_check(&check),
+        form: FormView::from_check(
+            &check,
+            channel_choices(&state, &user, Some(&selected)).await?,
+        ),
         timezones: &TZ_VARIANTS,
     };
     Ok(Html(page.render()?))
@@ -247,10 +298,12 @@ pub async fn update(
             checks::get(&state.db, user.org, id)
                 .await?
                 .ok_or(AppError::NotFound)?;
+            let selected = selected_ids(&input);
             let form = FormView {
                 action: format!("/checks/{id}"),
                 submit: "Save changes",
                 input,
+                channels: channel_choices(&state, &user, Some(&selected)).await?,
                 error: Some(error),
             };
             form_error(&headers, &user, "Edit check", form)
@@ -354,6 +407,7 @@ fn parse_spec(input: &CheckInput) -> Result<CheckSpec, String> {
         // Both bounded above, well within i32.
         grace_secs: grace_secs as i32,
         max_runtime_secs: max_runtime_secs.map(|s| s as i32),
+        channel_ids: selected_ids(input),
     })
 }
 
@@ -646,7 +700,7 @@ mod tests {
     use super::*;
 
     fn input(kind: &str) -> CheckInput {
-        let mut form = FormView::blank().input;
+        let mut form = FormView::blank(Vec::new()).input;
         form.name = "Backup".into();
         form.schedule_kind = kind.into();
         form

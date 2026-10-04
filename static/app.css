@@ -207,3 +207,16 @@ details summary { cursor: pointer; color: var(--accent); }
 .check-form:has(input[value="cron"]:checked) .period-only { display: none; }
 .check-form:has(input[value="period"]:checked) .cron-only { display: none; }
 .preview { min-height: 1.5em; }
+
+/* ───────── channels ───────── */
+
+.form fieldset.choice.stacked { flex-direction: column; gap: 0.4rem; }
+.form label.radio .muted { margin-left: 0.25rem; }
+.kind-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+.card.kind { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0; text-decoration: none; color: var(--text); }
+.card.kind:hover { border-color: var(--accent); }
+.notice { border-color: var(--warn); }
+.notice-ok { margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-radius: var(--radius); background: var(--up-bg); color: var(--up); }
+#test-result .form-error { margin: 0.5rem 0; }
+.table .pill { margin-left: 0.4rem; }
+.table td:first-child .pill { margin-left: 0; }

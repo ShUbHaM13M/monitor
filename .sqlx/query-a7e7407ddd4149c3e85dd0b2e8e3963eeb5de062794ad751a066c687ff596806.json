@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO check_channels (check_id, channel_id, org_id)\n         SELECT $1, ch.id, ch.org_id FROM channels ch\n         WHERE ch.org_id = $2 AND ch.id = ANY($3)\n         ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7e7407ddd4149c3e85dd0b2e8e3963eeb5de062794ad751a066c687ff596806"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, status AS \"status: CheckStatus\", next_expected_at,\n                      last_ping_at, last_start_at\n               FROM checks\n               WHERE status IN ('up', 'started') AND alert_after <= now()\n               ORDER BY alert_after\n               LIMIT $1\n               FOR UPDATE SKIP LOCKED",
+  "query": "SELECT id, org_id, name, status AS \"status: CheckStatus\", next_expected_at,\n                      last_ping_at, last_start_at\n               FROM checks\n               WHERE status IN ('up', 'started') AND alert_after <= now()\n               ORDER BY alert_after\n               LIMIT $1\n               FOR UPDATE SKIP LOCKED",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,17 @@
       },
       {
         "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
         "name": "status: CheckStatus",
         "type_info": "Text",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "next_expected_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "last_ping_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "last_start_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -79,10 +90,11 @@
       false,
       false,
       false,
+      false,
       true,
       true,
       true
     ]
   },
-  "hash": "c5d7288f3562d8d1ced21ce87388b015d338b724fcc746274c2f76d4062f6ba7"
+  "hash": "fb091f8854df30878741e6bccc28d3c4d36e6e855f1b79f2d9e0edff1e1abdec"
 }

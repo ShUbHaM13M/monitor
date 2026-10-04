@@ -4,6 +4,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use super::channels;
 use crate::auth::OrgId;
 use crate::domain::schedule::{Schedule, ScheduleError};
 
@@ -74,6 +75,8 @@ pub struct CheckSpec {
     pub schedule: Schedule,
     pub grace_secs: i32,
     pub max_runtime_secs: Option<i32>,
+    /// Channels that get this check's alerts.
+    pub channel_ids: Vec<Uuid>,
 }
 
 struct ScheduleColumns {
@@ -152,7 +155,8 @@ pub async fn get(db: &PgPool, org: OrgId, id: Uuid) -> sqlx::Result<Option<Check
 /// Creates a heartbeat check in the org's oldest project.
 pub async fn create(db: &PgPool, org: OrgId, spec: &CheckSpec) -> sqlx::Result<Uuid> {
     let cols = ScheduleColumns::from(&spec.schedule);
-    sqlx::query_scalar!(
+    let mut tx = db.begin().await?;
+    let id = sqlx::query_scalar!(
         "INSERT INTO checks (id, org_id, project_id, kind, name, token, schedule_kind,
                              cron_expr, tz, period_secs, grace_secs, max_runtime_secs)
          SELECT $1, $2, p.id, 'heartbeat', $3, $4, $5, $6, $7, $8, $9, $10
@@ -172,8 +176,11 @@ pub async fn create(db: &PgPool, org: OrgId, spec: &CheckSpec) -> sqlx::Result<U
         spec.grace_secs,
         spec.max_runtime_secs,
     )
-    .fetch_one(db)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+    channels::set_for_check(&mut tx, org, id, &spec.channel_ids).await?;
+    tx.commit().await?;
+    Ok(id)
 }
 
 /// Saves a new definition. For a check that is up, the deadline is recomputed
@@ -217,6 +224,7 @@ pub async fn update(db: &PgPool, org: OrgId, id: Uuid, spec: &CheckSpec) -> sqlx
     )
     .execute(&mut *tx)
     .await?;
+    channels::set_for_check(&mut tx, org, id, &spec.channel_ids).await?;
     tx.commit().await?;
     Ok(true)
 }

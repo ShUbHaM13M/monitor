@@ -14,7 +14,8 @@
     <a class="brand" href="/">◉ Monitor</a>
     <nav>
       {% if let Some(user) = chrome.user %}
-        <a href="/dashboard">Dashboard</a>
+        <a href="/dashboard">Checks</a>
+        <a href="/channels">Channels</a>
         <span class="muted">{{ user.org_name }} · {{ user.email }}</span>
         <form method="post" action="/logout" class="inline">
           <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
