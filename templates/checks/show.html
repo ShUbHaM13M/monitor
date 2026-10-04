@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ name }} · Monitor{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="/dashboard">← All checks</a></p>
+<div class="page-head">
+  <h1>{{ name }}</h1>
+  <div class="actions">
+    <a href="/checks/{{ id }}/edit" class="button secondary">Edit</a>
+    {% if paused %}
+    <form method="post" action="/checks/{{ id }}/resume" class="inline">
+      <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+      <button type="submit" class="button secondary">Resume</button>
+    </form>
+    {% else %}
+    <form method="post" action="/checks/{{ id }}/pause" class="inline">
+      <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+      <button type="submit" class="button secondary">Pause</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/checks/{{ id }}/delete" class="inline"
+          hx-post="/checks/{{ id }}/delete" hx-confirm="Delete this check and all of its pings?">
+      <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+      <button type="submit" class="button danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<p class="muted">
+  Schedule <span class="mono">{{ schedule }}</span> · grace {{ grace }}
+  {% if let Some(max_runtime) = max_runtime %} · max run time {{ max_runtime }}{% endif %}
+</p>
+
+<section class="card">
+  <h2>Ping URL</h2>
+  <pre class="snippet"><code>{{ snippets.ping_url }}</code></pre>
+  <p class="muted">Call it when the job succeeds:</p>
+  <pre class="snippet"><code>{{ snippets.simple }}</code></pre>
+  {% if let Some(crontab) = snippets.crontab %}
+  <p class="muted">As a crontab line:</p>
+  <pre class="snippet"><code>{{ crontab }}</code></pre>
+  {% endif %}
+  <details>
+    <summary>Report start, exit code and log output</summary>
+    <p class="muted">
+      Ping <code>/start</code> before the job and <code>/&lt;exit code&gt;</code> after it.
+      A non-zero code marks the check down right away; the request body (last 10 KB) is kept with the ping.
+    </p>
+    <pre class="snippet"><code>{{ snippets.wrapper }}</code></pre>
+  </details>
+</section>
+
+{% include "checks/activity.html" %}
+{% endblock %}

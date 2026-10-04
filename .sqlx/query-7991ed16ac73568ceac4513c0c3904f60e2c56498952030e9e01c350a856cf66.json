@@ -1,0 +1,109 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.kind, p.exit_code, p.duration_ms, host(p.source_ip) AS source_ip,\n                  p.user_agent, p.body, p.created_at\n           FROM pings p\n           JOIN checks c ON c.id = p.check_id\n           WHERE p.check_id = $1 AND c.org_id = $2\n           ORDER BY p.created_at DESC, p.id DESC\n           LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "exit_code",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "exit_code"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "duration_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "duration_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "source_ip",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "user_agent",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "user_agent"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pings",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      null,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "7991ed16ac73568ceac4513c0c3904f60e2c56498952030e9e01c350a856cf66"
+}

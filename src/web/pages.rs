@@ -6,8 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use super::{AppError, AppState, Chrome};
-use crate::auth::{CurrentUser, MaybeUser};
-use crate::db::projects::{self, Project};
+use crate::auth::MaybeUser;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -28,26 +27,6 @@ pub async fn index(
         base_url: &state.config.base_url,
     };
     Ok(Html(page.render()?).into_response())
-}
-
-#[derive(Template)]
-#[template(path = "dashboard.html")]
-struct DashboardPage {
-    chrome: Chrome,
-    org_name: String,
-    projects: Vec<Project>,
-}
-
-pub async fn dashboard(
-    State(state): State<AppState>,
-    user: CurrentUser,
-) -> Result<Html<String>, AppError> {
-    let page = DashboardPage {
-        chrome: Chrome::signed_in(&user),
-        projects: projects::list(&state.db, user.org).await?,
-        org_name: user.org_name,
-    };
-    Ok(Html(page.render()?))
 }
 
 /// Liveness + database reachability, for load balancers and uptime checks.

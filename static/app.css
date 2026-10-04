@@ -148,3 +148,62 @@ form.inline { display: inline; }
 
 .list { margin: 0; padding-left: 1.1rem; }
 .list li { padding: 0.15rem 0; }
+
+/* ───────── checks ───────── */
+
+.mono { font-family: var(--mono); font-size: 0.9em; }
+.text-down { color: var(--down); }
+
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.page-head h1 { margin: 0.25rem 0; }
+.actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.narrow { max-width: 560px; }
+
+.button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.button.danger { background: var(--down-bg); color: var(--down); }
+
+.pill-run { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.pill-muted { color: var(--muted); background: color-mix(in srgb, var(--muted) 15%, transparent); }
+
+.table {
+  width: 100%;
+  margin-top: 1.5rem;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.card .table { margin-top: 0; border: 0; }
+.table th, .table td { padding: 0.55rem 0.75rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.table th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.table tr:last-child td { border-bottom: 0; }
+.table details pre { max-width: 480px; max-height: 320px; white-space: pre-wrap; margin: 0.5rem 0 0; }
+
+.stats { display: flex; gap: 2.5rem; flex-wrap: wrap; }
+.stats > div { display: flex; flex-direction: column; gap: 0.2rem; }
+.stats .muted { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.incidents { list-style: none; margin: 0; padding: 0; }
+.incidents li { padding: 0.5rem 0.75rem; border-left: 3px solid var(--border); margin-bottom: 0.5rem; }
+.incidents li.open { border-left-color: var(--down); }
+.incidents li .muted { margin-left: 0.5rem; }
+
+details summary { cursor: pointer; color: var(--accent); }
+
+/* Check form: show only the fields for the chosen schedule type, no JS needed. */
+.form select, .form fieldset input[type="text"] {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.form .row { display: flex; gap: 0.75rem; align-items: flex-end; }
+.form .row .grow { flex: 1; }
+.form fieldset.choice { display: flex; gap: 1.5rem; border: 0; padding: 0; margin: 0; }
+.form fieldset.choice legend { font-weight: 600; margin-bottom: 0.3rem; }
+.form label.radio { flex-direction: row; align-items: center; gap: 0.4rem; font-weight: 400; }
+.check-form:has(input[value="cron"]:checked) .period-only { display: none; }
+.check-form:has(input[value="period"]:checked) .cron-only { display: none; }
+.preview { min-height: 1.5em; }

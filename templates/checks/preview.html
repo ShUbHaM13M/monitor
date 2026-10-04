@@ -1,0 +1,8 @@
+{% if let Some(error) = error %}
+<span class="text-down">{{ error }}</span>
+{% else %}
+{% if let Some(note) = note %}{{ note }}{% endif %}
+{% if !lines.is_empty() %}
+<ul class="list">{% for line in lines %}<li>{{ line }}</li>{% endfor %}</ul>
+{% endif %}
+{% endif %}

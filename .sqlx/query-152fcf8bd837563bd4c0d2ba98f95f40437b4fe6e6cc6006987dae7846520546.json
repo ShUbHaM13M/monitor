@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE checks\n                 SET status = $2, last_ping_at = $3, last_start_at = NULL,\n                     next_expected_at = $4, alert_after = $5, updated_at = now()\n                 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "152fcf8bd837563bd4c0d2ba98f95f40437b4fe6e6cc6006987dae7846520546"
+}

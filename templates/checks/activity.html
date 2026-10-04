@@ -1,0 +1,52 @@
+{# Polls itself; skips a refresh while a ping body is expanded so it doesn't collapse. #}
+<div id="activity" hx-get="/checks/{{ activity.id }}/activity"
+     hx-trigger="every 10s [!this.querySelector('details[open]')]" hx-swap="outerHTML">
+  <section class="card stats">
+    <div><span class="muted">Status</span><span class="pill {{ activity.status.css() }}">{{ activity.status.label() }}</span></div>
+    <div><span class="muted">Last ping</span>{{ activity.last_ping }}</div>
+    <div><span class="muted">Next due</span>{{ activity.next_due }}</div>
+  </section>
+
+  {% if !activity.incidents.is_empty() %}
+  <section class="card">
+    <h2>Incidents</h2>
+    <ul class="incidents">
+      {% for incident in activity.incidents %}
+      <li class="{% if incident.open %}open{% endif %}">
+        <strong>{{ incident.reason }}</strong>
+        <span class="muted">{{ incident.started }} · {{ incident.resolution }}</span>
+        {% if !incident.detail.is_empty() %}<div>{{ incident.detail }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Recent pings</h2>
+    {% if activity.pings.is_empty() %}
+    <p class="muted">No pings yet. The check stays <em>new</em> until the first one arrives.</p>
+    {% else %}
+    <table class="table">
+      <thead><tr><th>Signal</th><th>When</th><th>Duration</th><th>Source</th><th>Output</th></tr></thead>
+      <tbody>
+        {% for ping in activity.pings %}
+        <tr>
+          <td><span class="pill {{ ping.css }}">{{ ping.kind }}</span></td>
+          <td title="{{ ping.at }}">{{ ping.when }}</td>
+          <td>{% if let Some(d) = ping.duration %}{{ d }}{% endif %}</td>
+          <td class="muted" title="{% if let Some(ua) = ping.user_agent %}{{ ua }}{% endif %}">
+            {% if let Some(ip) = ping.source_ip %}{{ ip }}{% endif %}
+          </td>
+          <td>
+            {% if let Some(body) = ping.body %}
+            <details><summary>show</summary><pre class="snippet">{{ body }}</pre></details>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+</div>

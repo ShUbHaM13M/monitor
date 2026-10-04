@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE checks\n         SET status = 'new', last_start_at = NULL, updated_at = now()\n         WHERE id = $1 AND org_id = $2 AND status = 'paused'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "13180117489621ba7cb7842840cc8b89da6dba8e480f6c5d0c5ff2ae37727b1f"
+}

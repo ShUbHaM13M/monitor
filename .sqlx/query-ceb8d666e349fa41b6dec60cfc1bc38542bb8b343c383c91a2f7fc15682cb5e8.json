@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status AS \"status: CheckStatus\", last_ping_at, next_expected_at, alert_after\n           FROM checks WHERE id = $1 AND org_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: CheckStatus",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "last_ping_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "last_ping_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "next_expected_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "next_expected_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "alert_after",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "alert_after"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "ceb8d666e349fa41b6dec60cfc1bc38542bb8b343c383c91a2f7fc15682cb5e8"
+}

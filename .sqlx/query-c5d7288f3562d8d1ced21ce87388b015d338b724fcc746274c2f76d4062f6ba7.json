@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, org_id, status AS \"status: CheckStatus\", next_expected_at,\n                      last_ping_at, last_start_at\n               FROM checks\n               WHERE status IN ('up', 'started') AND alert_after <= now()\n               ORDER BY alert_after\n               LIMIT $1\n               FOR UPDATE SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "org_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status: CheckStatus",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "next_expected_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "next_expected_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "last_ping_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "last_ping_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_start_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "last_start_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "c5d7288f3562d8d1ced21ce87388b015d338b724fcc746274c2f76d4062f6ba7"
+}

@@ -1,0 +1,76 @@
+<form class="card form check-form" method="post" action="{{ form.action }}"
+      hx-post="{{ form.action }}" hx-target="this" hx-swap="outerHTML">
+  {% if let Some(error) = form.error %}
+  <p class="form-error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  <label>Name
+    <input type="text" name="name" value="{{ form.input.name }}" required maxlength="100"
+           placeholder="Daily database backup" autofocus>
+  </label>
+
+  <fieldset class="choice">
+    <legend>Schedule</legend>
+    <label class="radio">
+      <input type="radio" name="schedule_kind" value="period" {% if form.input.schedule_kind != "cron" %}checked{% endif %}>
+      Simple period
+    </label>
+    <label class="radio">
+      <input type="radio" name="schedule_kind" value="cron" {% if form.input.schedule_kind == "cron" %}checked{% endif %}>
+      Cron expression
+    </label>
+  </fieldset>
+
+  <div class="period-only row">
+    <label>Expect a ping every
+      <input type="number" name="period_value" value="{{ form.input.period_value }}" min="1">
+    </label>
+    <label>&nbsp;
+      <select name="period_unit">
+        <option value="minutes" {% if form.input.period_unit == "minutes" %}selected{% endif %}>minutes</option>
+        <option value="hours" {% if form.input.period_unit == "hours" %}selected{% endif %}>hours</option>
+        <option value="days" {% if form.input.period_unit == "days" %}selected{% endif %}>days</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="cron-only row">
+    <label class="grow">Cron expression
+      <input type="text" name="cron_expr" value="{{ form.input.cron_expr }}" class="mono" placeholder="0 2 * * *">
+    </label>
+    <label class="grow">Timezone
+      <input type="text" name="tz" value="{{ form.input.tz }}" list="timezones" placeholder="UTC">
+    </label>
+    <datalist id="timezones">
+      {% for tz in timezones %}<option value="{{ tz.name() }}"></option>{% endfor %}
+    </datalist>
+  </div>
+
+  {# Own target and swap: otherwise it inherits the form's hx-target="this" (the form)
+     and outerHTML swap, and the preview replaces the whole form. #}
+  <div class="preview muted" hx-get="/checks/preview" hx-include="closest form"
+       hx-trigger="load, input from:closest form delay:300ms, change from:closest form"
+       hx-target="this" hx-swap="innerHTML">
+  </div>
+
+  <div class="row">
+    <label>Grace period
+      <input type="number" name="grace_value" value="{{ form.input.grace_value }}" min="0">
+    </label>
+    <label>&nbsp;
+      <select name="grace_unit">
+        <option value="minutes" {% if form.input.grace_unit == "minutes" %}selected{% endif %}>minutes</option>
+        <option value="hours" {% if form.input.grace_unit == "hours" %}selected{% endif %}>hours</option>
+        <option value="days" {% if form.input.grace_unit == "days" %}selected{% endif %}>days</option>
+      </select>
+    </label>
+  </div>
+  <small class="muted">How late a ping may be before the check goes down.</small>
+
+  <label><span>Max run time <span class="muted">(minutes, optional)</span></span>
+    <input type="number" name="max_runtime_minutes" value="{{ form.input.max_runtime_minutes }}" min="1">
+    <small class="muted">If the job pings <code>/start</code>, it goes down when it hasn't finished within this time.</small>
+  </label>
+
+  <button type="submit" class="button">{{ form.submit }}</button>
+</form>

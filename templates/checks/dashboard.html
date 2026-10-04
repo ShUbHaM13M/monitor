@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block title %}Checks · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>{{ org_name }}</h1>
+  <a href="/checks/new" class="button">New check</a>
+</div>
+
+{% if rows.is_empty() %}
+<section class="card empty">
+  <h2>No checks yet</h2>
+  <p class="muted">
+    Create a check for each cron job or worker, then call its ping URL whenever the job finishes.
+    If a ping doesn't arrive on time, the check goes down.
+  </p>
+  <pre class="snippet"><code>0 2 * * * /usr/local/bin/backup.sh &amp;&amp; curl -fsS -m 10 --retry 3 https://…/p/&lt;token&gt;</code></pre>
+  <a href="/checks/new" class="button">Create your first check</a>
+</section>
+{% else %}
+<table class="table">
+  <thead>
+    <tr><th>Status</th><th>Name</th><th>Schedule</th><th>Last ping</th><th>Next due</th></tr>
+  </thead>
+  <tbody hx-get="/checks/table" hx-trigger="every 10s" hx-swap="innerHTML">
+    {% include "checks/rows.html" %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

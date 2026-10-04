@@ -1,4 +1,6 @@
-pub mod projects;
+pub mod checks;
+pub mod incidents;
+pub mod pings;
 pub mod users;
 
 use std::time::Duration;

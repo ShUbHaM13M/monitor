@@ -50,7 +50,9 @@ static/       CSS and vendored htmx, embedded in release builds
 src/
   auth/       passwords, sessions, CSRF, CurrentUser/OrgId extractors
   config.rs   CLI / env configuration
-  db/         pool, migrations, queries
-  web/        router, handlers, error type, static assets
-  worker/     background loops (Postgres FOR UPDATE SKIP LOCKED for work claiming)
+  db/         pool, migrations, queries (tenant data always scoped by OrgId)
+  domain/     pure logic: schedules (cron + tz), ping signals, time formatting
+  web/        router, handlers, ping ingest (/p/{token}), error type, static assets
+  worker/     background loops: deadline scheduler, session cleanup
+              (work is claimed with FOR UPDATE SKIP LOCKED, so workers can scale out)
 ```

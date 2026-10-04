@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ title }} · Monitor{% endblock %}
+
+{% block content %}
+<section class="narrow">
+  <h1>{{ title }}</h1>
+  {% include "checks/form_fields.html" %}
+</section>
+{% endblock %}

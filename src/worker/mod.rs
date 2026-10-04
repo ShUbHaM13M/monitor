@@ -1,3 +1,5 @@
+pub mod scheduler;
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -13,6 +15,17 @@ use crate::auth::session;
 /// number of worker processes can run side by side.
 pub async fn run(db: PgPool, shutdown: CancellationToken) -> anyhow::Result<()> {
     let mut tasks = JoinSet::new();
+
+    let scheduler_db = db.clone();
+    tasks.spawn(periodic(
+        "scheduler",
+        Duration::from_secs(5),
+        shutdown.clone(),
+        move || {
+            let db = scheduler_db.clone();
+            async move { scheduler::tick(&db).await.map(drop) }
+        },
+    ));
 
     tasks.spawn(periodic(
         "sessions-cleanup",

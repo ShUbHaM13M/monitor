@@ -1,8 +1,11 @@
 mod assets;
 mod auth;
+mod checks;
 mod error;
+mod ingest;
 mod pages;
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,7 +35,17 @@ pub struct AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(pages::index))
-        .route("/dashboard", get(pages::dashboard))
+        .route("/dashboard", get(checks::dashboard))
+        .route("/checks/table", get(checks::table))
+        .route("/checks/new", get(checks::new_page))
+        .route("/checks/preview", get(checks::preview))
+        .route("/checks", post(checks::create))
+        .route("/checks/{id}", get(checks::show).post(checks::update))
+        .route("/checks/{id}/activity", get(checks::activity_partial))
+        .route("/checks/{id}/edit", get(checks::edit_page))
+        .route("/checks/{id}/pause", post(checks::pause))
+        .route("/checks/{id}/resume", post(checks::resume))
+        .route("/checks/{id}/delete", post(checks::delete))
         .route("/signup", get(auth::signup_page).post(auth::signup))
         .route("/login", get(auth::login_page).post(auth::login))
         .route("/logout", post(auth::logout))
@@ -43,6 +56,7 @@ pub fn router(state: AppState) -> Router {
             state.clone(),
             crate::auth::csrf::protect,
         ))
+        .merge(ingest::routes())
         .with_state(state)
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
@@ -58,7 +72,8 @@ pub async fn serve(state: AppState, shutdown: CancellationToken) -> anyhow::Resu
     let addr = state.config.bind_addr;
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, "web server listening");
-    axum::serve(listener, router(state))
+    let app = router(state).into_make_service_with_connect_info::<SocketAddr>();
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await?;
     Ok(())

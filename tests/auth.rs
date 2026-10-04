@@ -1,123 +1,11 @@
-use std::sync::Arc;
+mod common;
 
-use axum::Router;
 use axum::body::Body;
-use axum::http::{HeaderMap, Request, StatusCode, header};
-use http_body_util::BodyExt;
+use axum::http::{Request, StatusCode, header};
 use monitor::auth::session;
-use monitor::config::{Config, LogFormat};
-use monitor::web::{self, AppState};
 use sqlx::PgPool;
-use tower::ServiceExt;
 
-const ORIGIN: &str = "http://localhost:3000";
-const PASSWORD: &str = "correct horse battery";
-
-fn app(db: PgPool) -> Router {
-    let config = Config {
-        database_url: String::new(),
-        db_max_connections: 1,
-        bind_addr: "127.0.0.1:0".parse().unwrap(),
-        base_url: ORIGIN.into(),
-        auto_migrate: false,
-        log_format: LogFormat::Pretty,
-    };
-    web::router(AppState {
-        db,
-        config: Arc::new(config),
-    })
-}
-
-struct Resp {
-    status: StatusCode,
-    headers: HeaderMap,
-    body: String,
-}
-
-impl Resp {
-    fn header(&self, name: &str) -> &str {
-        self.headers
-            .get(name)
-            .map(|v| v.to_str().unwrap())
-            .unwrap_or_default()
-    }
-
-    /// `session=<token>` from Set-Cookie, if a non-empty session cookie was set.
-    fn session_cookie(&self) -> Option<String> {
-        self.headers
-            .get_all(header::SET_COOKIE)
-            .iter()
-            .map(|v| v.to_str().unwrap())
-            .find(|c| c.starts_with("session=") && !c.starts_with("session=;"))
-            .map(|c| c.split(';').next().unwrap().to_owned())
-    }
-}
-
-async fn send(app: &Router, req: Request<Body>) -> Resp {
-    let res = app.clone().oneshot(req).await.unwrap();
-    let status = res.status();
-    let headers = res.headers().clone();
-    let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    Resp {
-        status,
-        headers,
-        body: String::from_utf8(bytes.to_vec()).unwrap(),
-    }
-}
-
-fn get(path: &str, cookie: Option<&str>) -> Request<Body> {
-    let mut req = Request::get(path);
-    if let Some(cookie) = cookie {
-        req = req.header(header::COOKIE, cookie);
-    }
-    req.body(Body::empty()).unwrap()
-}
-
-fn post_form(path: &str, cookie: Option<&str>) -> axum::http::request::Builder {
-    let mut req = Request::post(path)
-        .header(header::ORIGIN, ORIGIN)
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
-    if let Some(cookie) = cookie {
-        req = req.header(header::COOKIE, cookie);
-    }
-    req
-}
-
-fn form_req(path: &str, form: &str, cookie: Option<&str>) -> Request<Body> {
-    post_form(path, cookie)
-        .body(Body::from(form.to_owned()))
-        .unwrap()
-}
-
-fn encode(s: &str) -> String {
-    form_urlencoded::byte_serialize(s.as_bytes()).collect()
-}
-
-async fn signup(app: &Router, email: &str) -> String {
-    let body = format!("email={}&password={}", encode(email), encode(PASSWORD));
-    let res = send(app, form_req("/signup", &body, None)).await;
-    assert_eq!(
-        res.status,
-        StatusCode::SEE_OTHER,
-        "signup failed: {}",
-        res.body
-    );
-    res.session_cookie().expect("signup sets a session cookie")
-}
-
-/// The CSRF token rendered into the page layout for a signed-in user.
-async fn csrf_token(app: &Router, cookie: &str) -> String {
-    let res = send(app, get("/dashboard", Some(cookie))).await;
-    assert_eq!(res.status, StatusCode::OK);
-    let marker = r#"name="_csrf" value=""#;
-    let start = res.body.find(marker).expect("csrf field in page") + marker.len();
-    let len = res.body[start..].find('"').unwrap();
-    res.body[start..start + len].to_owned()
-}
-
-async fn count(db: &PgPool, sql: &'static str) -> i64 {
-    sqlx::query_scalar(sql).fetch_one(db).await.unwrap()
-}
+use common::*;
 
 #[sqlx::test]
 async fn signup_creates_account_org_project_and_session(db: PgPool) {
@@ -159,7 +47,6 @@ async fn signup_creates_account_org_project_and_session(db: PgPool) {
     let dash = send(&app, get("/dashboard", Some(&cookie))).await;
     assert_eq!(dash.status, StatusCode::OK);
     assert!(dash.body.contains("ops&#39;s org") || dash.body.contains("ops's org"));
-    assert!(dash.body.contains("Default"));
 }
 
 #[sqlx::test]
@@ -351,24 +238,19 @@ async fn users_only_see_their_own_org(db: PgPool) {
     let alice = signup(&app, "alice@example.com").await;
     let bob = signup(&app, "bob@example.com").await;
 
-    sqlx::query(
-        "INSERT INTO projects (id, org_id, name)
-         SELECT gen_random_uuid(), m.org_id, 'Alice secret project'
-         FROM memberships m JOIN users u ON u.id = m.user_id
-         WHERE u.email = 'alice@example.com'",
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let alice_check = create_check(&app, &alice, "name=Alice+secret+backup&schedule_kind=period&period_value=1&period_unit=days&grace_value=1&grace_unit=hours").await;
 
     let alice_dash = send(&app, get("/dashboard", Some(&alice))).await;
-    assert!(alice_dash.body.contains("Alice secret project"));
+    assert!(alice_dash.body.contains("Alice secret backup"));
     assert!(alice_dash.body.contains("alice&#39;s org") || alice_dash.body.contains("alice's org"));
 
     let bob_dash = send(&app, get("/dashboard", Some(&bob))).await;
     assert_eq!(bob_dash.status, StatusCode::OK);
-    assert!(!bob_dash.body.contains("Alice secret project"));
+    assert!(!bob_dash.body.contains("Alice secret backup"));
     assert!(!bob_dash.body.contains("alice"));
+
+    let bob_view = send(&app, get(&format!("/checks/{alice_check}"), Some(&bob))).await;
+    assert_eq!(bob_view.status, StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test]

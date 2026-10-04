@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE checks SET status = 'down', updated_at = now() WHERE id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0de3e155ce658e85bfa81e53ba55cb96f3cbd457a19419310128cae5c75614cf"
+}
