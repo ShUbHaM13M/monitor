@@ -1,73 +1,24 @@
-use std::time::Duration;
+use std::sync::Arc;
 
 use askama::Template;
 use async_trait::async_trait;
-use lettre::message::header::ContentType;
-use lettre::message::{Mailbox, MultiPart};
-use lettre::transport::smtp;
-use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use serde_json::{Value, json};
 
 use crate::domain::email::is_valid;
+use crate::mail::{Body, Mailer};
 use crate::notify::alert::Alert;
 use crate::notify::kind::{
     ChannelCtx, ChannelKind, Field, FieldValues, Input, SendError, Verification, config_str, value,
 };
 
-/// Sends alerts over SMTP to one address per channel.
+/// Sends alerts to one address per channel.
 pub struct Email {
-    transport: AsyncSmtpTransport<Tokio1Executor>,
-    from: Mailbox,
+    mailer: Arc<Mailer>,
 }
 
 impl Email {
-    pub fn new(smtp_url: &str, from: &str) -> anyhow::Result<Self> {
-        let transport = AsyncSmtpTransport::<Tokio1Executor>::from_url(smtp_url)?
-            .timeout(Some(Duration::from_secs(15)))
-            .build();
-        let from = from
-            .parse()
-            .map_err(|err| anyhow::anyhow!("SMTP_FROM {from:?} is not a valid mailbox: {err}"))?;
-        Ok(Self { transport, from })
-    }
-
-    async fn deliver(
-        &self,
-        to: &str,
-        message: lettre::message::MessageBuilder,
-        body: Body,
-    ) -> Result<(), SendError> {
-        let to: Mailbox = to
-            .parse()
-            .map_err(|err| SendError::Permanent(format!("invalid address {to:?}: {err}")))?;
-        let message = message.from(self.from.clone()).to(to);
-        let message = match body {
-            Body::Text(text) => message.header(ContentType::TEXT_PLAIN).body(text),
-            Body::Alternative { text, html } => {
-                message.multipart(MultiPart::alternative_plain_html(text, html))
-            }
-        }
-        .map_err(|err| SendError::Permanent(format!("could not build email: {err}")))?;
-        self.transport
-            .send(message)
-            .await
-            .map(drop)
-            .map_err(smtp_error)
-    }
-}
-
-enum Body {
-    Text(String),
-    Alternative { text: String, html: String },
-}
-
-/// 5xx replies are permanent (bad mailbox, rejected sender); anything else
-/// (4xx, connection problems, timeouts) is worth retrying.
-fn smtp_error(err: smtp::Error) -> SendError {
-    if err.is_permanent() {
-        SendError::Permanent(err.to_string())
-    } else {
-        SendError::Retryable(err.to_string())
+    pub fn new(mailer: Arc<Mailer>) -> Self {
+        Self { mailer }
     }
 }
 
@@ -118,7 +69,12 @@ impl ChannelKind for Email {
     }
 
     fn verification(&self, config: &Value, ctx: &ChannelCtx) -> Verification {
-        if config_str(config, "address").eq_ignore_ascii_case(&ctx.account_email) {
+        let address = config_str(config, "address");
+        let own = ctx
+            .verified_account_email
+            .as_deref()
+            .is_some_and(|email| address.eq_ignore_ascii_case(email));
+        if own {
             Verification::None
         } else {
             Verification::Link
@@ -136,12 +92,9 @@ impl ChannelKind for Email {
             text: alert.text(),
             html,
         };
-        self.deliver(
-            config_str(config, "address"),
-            Message::builder().subject(alert.title()),
-            body,
-        )
-        .await
+        self.mailer
+            .send(config_str(config, "address"), &alert.title(), body)
+            .await
     }
 
     async fn send_verification(&self, config: &Value, link: &str) -> Result<(), SendError> {
@@ -150,12 +103,13 @@ impl ChannelKind for Email {
              To start receiving them, confirm here:\n{link}\n\n\
              If you didn't expect this, ignore this email and nothing will be sent."
         );
-        self.deliver(
-            config_str(config, "address"),
-            Message::builder().subject("Confirm alerts from Monitor"),
-            Body::Text(text),
-        )
-        .await
+        self.mailer
+            .send(
+                config_str(config, "address"),
+                "Confirm alerts from Monitor",
+                Body::Text(text),
+            )
+            .await
     }
 }
 
@@ -164,12 +118,14 @@ mod tests {
     use super::*;
 
     fn email() -> Email {
-        Email::new("smtp://localhost:1025", "Monitor <alerts@localhost>").unwrap()
+        Email::new(Arc::new(
+            Mailer::new("smtp://localhost:1025", "Monitor <alerts@localhost>").unwrap(),
+        ))
     }
 
-    fn ctx() -> ChannelCtx {
+    fn ctx(verified: bool) -> ChannelCtx {
         ChannelCtx {
-            account_email: "Me@Example.com".into(),
+            verified_account_email: verified.then(|| "Me@Example.com".into()),
             allow_private_targets: false,
         }
     }
@@ -179,30 +135,31 @@ mod tests {
     async fn validates_and_summarises() {
         let mut input = FieldValues::new();
         input.insert("address".into(), "  oncall@example.com ".into());
-        let config = email().validate(&input, &ctx()).unwrap();
+        let config = email().validate(&input, &ctx(true)).unwrap();
         assert_eq!(config, json!({ "address": "oncall@example.com" }));
         assert_eq!(email().summary(&config), "oncall@example.com");
 
         input.insert("address".into(), "nope".into());
-        assert!(email().validate(&input, &ctx()).is_err());
+        assert!(email().validate(&input, &ctx(true)).is_err());
     }
 
     #[tokio::test]
-    async fn own_address_needs_no_confirmation() {
+    async fn own_verified_address_needs_no_confirmation() {
         let own = json!({ "address": "me@example.com" });
         let other = json!({ "address": "team@example.com" });
         assert!(matches!(
-            email().verification(&own, &ctx()),
+            email().verification(&own, &ctx(true)),
             Verification::None
         ));
         assert!(matches!(
-            email().verification(&other, &ctx()),
+            email().verification(&other, &ctx(true)),
             Verification::Link
         ));
-    }
-
-    #[tokio::test]
-    async fn rejects_a_bad_from_address() {
-        assert!(Email::new("smtp://localhost:1025", "not an address").is_err());
+        // Until the account email is confirmed it's just another address: otherwise
+        // signing up with someone else's email would let you mail them alerts.
+        assert!(matches!(
+            email().verification(&own, &ctx(false)),
+            Verification::Link
+        ));
     }
 }

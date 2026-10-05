@@ -2,7 +2,7 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 pub const COOKIE_NAME: &str = "session";
@@ -17,6 +17,7 @@ const COOKIE_MAX_AGE: time::Duration = time::Duration::days(400);
 pub struct SessionRow {
     pub user_id: Uuid,
     pub email: String,
+    pub email_verified: bool,
     pub org_id: Uuid,
     pub org_name: String,
     pub csrf_token: String,
@@ -53,7 +54,8 @@ pub async fn create(db: &PgPool, user_id: Uuid, org_id: Uuid) -> sqlx::Result<St
 pub async fn load(db: &PgPool, token: &str) -> sqlx::Result<Option<SessionRow>> {
     let token_hash = hash_token(token);
     let row = sqlx::query!(
-        r#"SELECT s.user_id, u.email, s.org_id, o.name AS org_name, s.csrf_token,
+        r#"SELECT s.user_id, u.email, u.email_verified_at IS NOT NULL AS "email_verified!",
+                  s.org_id, o.name AS org_name, s.csrf_token,
                   s.last_seen_at < now() - interval '1 hour' AS "stale!"
            FROM sessions s
            JOIN users u ON u.id = s.user_id
@@ -80,6 +82,7 @@ pub async fn load(db: &PgPool, token: &str) -> sqlx::Result<Option<SessionRow>> 
     Ok(Some(SessionRow {
         user_id: row.user_id,
         email: row.email,
+        email_verified: row.email_verified,
         org_id: row.org_id,
         org_name: row.org_name,
         csrf_token: row.csrf_token,
@@ -94,6 +97,14 @@ pub async fn delete(db: &PgPool, token: &str) -> sqlx::Result<()> {
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// Logs a user out everywhere, e.g. after a password reset.
+pub async fn delete_all_for_user(conn: &mut PgConnection, user_id: Uuid) -> sqlx::Result<u64> {
+    let res = sqlx::query!("DELETE FROM sessions WHERE user_id = $1", user_id)
+        .execute(conn)
+        .await?;
+    Ok(res.rows_affected())
 }
 
 pub async fn delete_expired(db: &PgPool) -> sqlx::Result<u64> {

@@ -9,8 +9,10 @@ use axum::http::{HeaderMap, Request, StatusCode, header};
 use http_body_util::BodyExt;
 use monitor::config::{Config, LogFormat};
 use monitor::web::{self, AppState};
+use serde_json::Value;
 use sqlx::PgPool;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 pub const ORIGIN: &str = "http://localhost:3000";
 pub const PASSWORD: &str = "correct horse battery";
@@ -165,4 +167,67 @@ pub async fn token_of(db: &PgPool, check_id: uuid::Uuid) -> String {
         .fetch_one(db)
         .await
         .unwrap()
+}
+
+// ───────────────────────────── Mailpit ─────────────────────────────
+
+/// Mailpit messages to `address`, newest first, as (id, subject).
+pub async fn inbox(address: &str) -> Vec<(String, String)> {
+    inbox_with_at_least(address, 0).await
+}
+
+/// Like [`inbox`], but waits (up to 3s) for `n` messages: some mail is sent in
+/// the background.
+pub async fn inbox_with_at_least(address: &str, n: usize) -> Vec<(String, String)> {
+    for _ in 0..60 {
+        let messages = fetch_inbox(address).await;
+        if messages.len() >= n {
+            return messages;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    fetch_inbox(address).await
+}
+
+async fn fetch_inbox(address: &str) -> Vec<(String, String)> {
+    let url = format!(
+        "{MAILPIT_API}/search?query={}",
+        encode(&format!("to:\"{address}\""))
+    );
+    let json: Value = reqwest::get(url).await.unwrap().json().await.unwrap();
+    json["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| {
+            (
+                m["ID"].as_str().unwrap().to_owned(),
+                m["Subject"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
+pub async fn message_text(id: &str) -> String {
+    let json: Value = reqwest::get(format!("{MAILPIT_API}/message/{id}"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    json["Text"].as_str().unwrap().to_owned()
+}
+
+pub fn unique_address(tag: &str) -> String {
+    format!("{tag}-{}@example.com", Uuid::new_v4().simple())
+}
+
+/// The first link in `text` that starts with `ORIGIN` + `path`, as a path.
+pub fn link_path(text: &str, path: &str) -> String {
+    let prefix = format!("{ORIGIN}{path}");
+    let link = text
+        .split_whitespace()
+        .find(|w| w.starts_with(&prefix))
+        .unwrap_or_else(|| panic!("no {prefix} link in {text:?}"));
+    link.strip_prefix(ORIGIN).unwrap().to_owned()
 }

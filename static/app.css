@@ -220,3 +220,15 @@ details summary { cursor: pointer; color: var(--accent); }
 #test-result .form-error { margin: 0.5rem 0; }
 .table .pill { margin-left: 0.4rem; }
 .table td:first-child .pill { margin-left: 0; }
+
+/* ───────── account ───────── */
+
+.banner {
+  padding: 0.6rem 1.5rem;
+  background: var(--warn-bg);
+  color: var(--warn);
+  text-align: center;
+}
+.banner button.link { color: inherit; font-weight: 600; }
+.label-row { display: flex; justify-content: space-between; align-items: baseline; }
+a.small { font-size: 0.85rem; font-weight: 400; }

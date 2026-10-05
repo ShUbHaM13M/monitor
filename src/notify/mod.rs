@@ -8,6 +8,7 @@ pub mod kind;
 use std::sync::Arc;
 
 use crate::config::Config;
+use crate::mail::Mailer;
 pub use alert::{Alert, AlertEvent};
 pub use kind::{ChannelCtx, ChannelKind, SendError, Verification};
 
@@ -19,13 +20,10 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn from_config(config: &Config) -> anyhow::Result<Self> {
+    pub fn from_config(config: &Config, mailer: Option<Arc<Mailer>>) -> Self {
         let mut kinds: Vec<Arc<dyn ChannelKind>> = Vec::new();
-        if let Some(smtp_url) = &config.smtp_url {
-            kinds.push(Arc::new(channels::email::Email::new(
-                smtp_url,
-                &config.smtp_from,
-            )?));
+        if let Some(mailer) = mailer {
+            kinds.push(Arc::new(channels::email::Email::new(mailer)));
         }
         kinds.push(Arc::new(channels::webhook::Webhook::new(
             http::client(config.allow_private_targets),
@@ -33,7 +31,7 @@ impl Registry {
         )));
         // New kinds go here, e.g.:
         // if let Some(twilio) = &config.twilio { kinds.push(Arc::new(channels::whatsapp::WhatsApp::new(twilio))); }
-        Ok(Self { kinds })
+        Self { kinds }
     }
 
     pub fn get(&self, id: &str) -> Option<&Arc<dyn ChannelKind>> {

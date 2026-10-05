@@ -142,7 +142,7 @@ mod tests {
 
     fn ctx(allow_private: bool) -> ChannelCtx {
         ChannelCtx {
-            account_email: "me@example.com".into(),
+            verified_account_email: None,
             allow_private_targets: allow_private,
         }
     }

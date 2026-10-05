@@ -27,6 +27,16 @@
       {% endif %}
     </nav>
   </header>
+  {% if chrome.verify_banner %}
+  {% if let Some(user) = chrome.user %}
+  <div class="banner" role="status">
+    Please confirm your email address. We sent a link to <strong>{{ user.email }}</strong>.
+    <form hx-post="/verify-email/resend" hx-target="closest .banner" hx-swap="innerHTML" class="inline">
+      <button type="submit" class="link">Resend</button>
+    </form>
+  </div>
+  {% endif %}
+  {% endif %}
   <main class="container">
     {% block content %}{% endblock %}
   </main>

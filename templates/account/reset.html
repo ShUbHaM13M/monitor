@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+
+{% block title %}Choose a new password · Monitor{% endblock %}
+
+{% block content %}
+<section class="auth">
+  {% if let Some(form) = form %}
+  <h1>Choose a new password</h1>
+  <form class="card form" method="post" action="/reset-password">
+    {% if let Some(error) = form.error %}
+    <p class="form-error" role="alert">{{ error }}</p>
+    {% endif %}
+    <p class="muted">For <strong>{{ form.email }}</strong>. You'll be logged out everywhere else.</p>
+    <input type="hidden" name="token" value="{{ form.token }}">
+    {# Lets password managers associate the new password with the account. #}
+    <input type="hidden" name="username" value="{{ form.email }}" autocomplete="username">
+    <label>New password
+      <input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" autofocus>
+      <small class="muted">At least 10 characters.</small>
+    </label>
+    <label>Repeat it
+      <input type="password" name="confirm" required minlength="10" maxlength="128" autocomplete="new-password">
+    </label>
+    <button type="submit" class="button">Set new password</button>
+  </form>
+  {% else %}
+  <h1>Link expired</h1>
+  <p class="muted">This reset link is invalid, already used or more than an hour old.</p>
+  <p><a href="/forgot-password" class="button">Get a new link</a></p>
+  {% endif %}
+</section>
+{% endblock %}

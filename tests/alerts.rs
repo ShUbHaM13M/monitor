@@ -403,44 +403,15 @@ async fn check_form_saves_channel_selection(db: PgPool) {
 
 // ───────────────────────────── email (Mailpit) ─────────────────────────────
 
-/// Mailpit messages to `address`, newest first, as (id, subject).
-async fn inbox(address: &str) -> Vec<(String, String)> {
-    let url = format!(
-        "{MAILPIT_API}/search?query={}",
-        encode(&format!("to:\"{address}\""))
-    );
-    let json: Value = reqwest::get(url).await.unwrap().json().await.unwrap();
-    json["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| {
-            (
-                m["ID"].as_str().unwrap().to_owned(),
-                m["Subject"].as_str().unwrap().to_owned(),
-            )
-        })
-        .collect()
-}
-
-async fn message_text(id: &str) -> String {
-    let json: Value = reqwest::get(format!("{MAILPIT_API}/message/{id}"))
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    json["Text"].as_str().unwrap().to_owned()
-}
-
-fn unique_address(tag: &str) -> String {
-    format!("{tag}-{}@example.com", Uuid::new_v4().simple())
-}
-
 #[sqlx::test]
-async fn email_to_your_own_address_works_immediately(db: PgPool) {
+async fn email_to_your_own_confirmed_address_works_immediately(db: PgPool) {
     let me = unique_address("me");
     let ctx = setup(db, &me).await;
+    // The shortcut needs a confirmed account email (see tests/account.rs).
+    sqlx::query("UPDATE users SET email_verified_at = now()")
+        .execute(&ctx.db)
+        .await
+        .unwrap();
     let check = create_check(&ctx.app, &ctx.cookie, HOURLY).await;
     let res = ctx
         .add_channel(
@@ -464,10 +435,15 @@ async fn email_to_your_own_address_works_immediately(db: PgPool) {
     let (_, status, _, error, _) = notification_row(&ctx.db).await;
     assert_eq!(status, "sent", "{error:?}");
 
+    // Alongside the signup confirmation email.
     let mail = inbox(&me).await;
-    assert_eq!(mail.len(), 1);
-    assert_eq!(mail[0].1, "🚨 Nightly backup is down");
-    let text = message_text(&mail[0].0).await;
+    let alerts: Vec<_> = mail
+        .iter()
+        .filter(|(_, subject)| subject.starts_with('🚨'))
+        .collect();
+    assert_eq!(alerts.len(), 1, "{mail:?}");
+    assert_eq!(alerts[0].1, "🚨 Nightly backup is down");
+    let text = message_text(&alerts[0].0).await;
     assert!(text.contains("Missed ping: Expected a ping by"), "{text}");
     assert!(text.contains(&format!("{ORIGIN}/checks/{check}")));
 }

@@ -7,7 +7,7 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{AppError, AppState, Chrome, is_htmx, redirect};
+use super::{AppError, AppState, Chrome, account, is_htmx, redirect};
 use crate::auth::{MaybeUser, password, session};
 use crate::db::users::{self, CreateAccountError};
 
@@ -87,6 +87,7 @@ pub async fn signup(
     let hash = password::hash(input.password).await?;
     match users::create_account(&state.db, email, &hash, &org_name).await {
         Ok(account) => {
+            account::send_verification_email(&state, account.user_id, email).await;
             start_session(
                 &state,
                 jar,
@@ -125,6 +126,7 @@ pub struct LoginView {
     email: String,
     next: String,
     error: Option<&'static str>,
+    notice: Option<&'static str>,
 }
 
 #[derive(Template)]
@@ -143,6 +145,8 @@ struct LoginForm {
 #[derive(Deserialize)]
 pub struct LoginQuery {
     next: Option<String>,
+    /// Set after a successful password reset.
+    reset: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -165,6 +169,10 @@ pub async fn login_page(
         chrome: Chrome::anonymous(),
         form: LoginView {
             next: next.to_owned(),
+            notice: query
+                .reset
+                .is_some()
+                .then_some("Your password was changed. Log in with the new one."),
             ..Default::default()
         },
     };
@@ -202,6 +210,7 @@ pub async fn login(
                 email: email.to_owned(),
                 next: next.to_owned(),
                 error: Some("Invalid email or password."),
+                notice: None,
             };
             let html = if is_htmx(&headers) {
                 LoginForm { form }.render()?
@@ -264,7 +273,7 @@ fn validate_email(email: &str) -> Option<&'static str> {
     (!crate::domain::email::is_valid(email)).then_some("Enter a valid email address.")
 }
 
-fn validate_password(password: &str) -> Option<&'static str> {
+pub(super) fn validate_password(password: &str) -> Option<&'static str> {
     let len = password.chars().count();
     if len < password::MIN_LEN {
         Some("Password must be at least 10 characters.")

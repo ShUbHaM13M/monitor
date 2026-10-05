@@ -52,8 +52,9 @@ pub type FieldValues = HashMap<String, String>;
 
 /// Context for validating a channel.
 pub struct ChannelCtx {
-    /// The signed-in user's email: alerts to it need no confirmation.
-    pub account_email: String,
+    /// The signed-in user's email, once they've confirmed it: alerts to it need no
+    /// further confirmation. `None` while unconfirmed.
+    pub verified_account_email: Option<String>,
     pub allow_private_targets: bool,
 }
 

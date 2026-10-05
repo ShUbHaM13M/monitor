@@ -69,6 +69,15 @@ src/
               (work is claimed with FOR UPDATE SKIP LOCKED, so workers can scale out)
 ```
 
+## Accounts
+
+Signing up emails a confirmation link, and the dashboard shows a banner (with "Resend")
+until it's confirmed. "Forgot password?" on the login page emails a reset link. It is valid
+for 1 hour, works once, and logs the user out everywhere. Both kinds of link open a page
+with a button rather than acting on the GET, because mail scanners prefetch links. Tokens
+are stored hashed, and each kind can be sent at most once a minute per account. Without
+`SMTP_URL` there is no banner and no reset.
+
 ## Alerts
 
 When a check goes down (missed ping, run never finished), fails (`/fail` or a non-zero
@@ -77,8 +86,8 @@ transaction** as the state change. The notifier worker delivers it, retrying wit
 exponential backoff (30s doubling to 1h, 8 attempts) and dead-lettering permanent failures.
 Each channel's page shows its delivery history.
 
-- Alerts only go to confirmed channels. An email channel addressed to anyone other than you
-  must be confirmed through a link first.
+- Alerts only go to confirmed channels. An email channel needs a confirmation link
+  unless it's addressed to your own, already confirmed, account email.
 - A recovery goes only to the channels that were told about that outage.
 
 ### Adding a channel

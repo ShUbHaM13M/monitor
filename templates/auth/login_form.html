@@ -3,11 +3,14 @@
   {% if let Some(error) = form.error %}
   <p class="form-error" role="alert">{{ error }}</p>
   {% endif %}
+  {% if let Some(notice) = form.notice %}
+  <p class="notice-ok" role="status">{{ notice }}</p>
+  {% endif %}
   <input type="hidden" name="next" value="{{ form.next }}">
   <label>Email
     <input type="email" name="email" value="{{ form.email }}" required autocomplete="email" autofocus>
   </label>
-  <label>Password
+  <label><span class="label-row">Password <a href="/forgot-password" class="small">Forgot password?</a></span>
     <input type="password" name="password" required autocomplete="current-password">
   </label>
   <button type="submit" class="button">Log in</button>

@@ -219,7 +219,7 @@ pub async fn create(
 ) -> Result<Response, AppError> {
     let kind = kind(&state, &kind_id)?;
     let ctx = ChannelCtx {
-        account_email: user.email.clone(),
+        verified_account_email: user.email_verified.then(|| user.email.clone()),
         allow_private_targets: state.config.allow_private_targets,
     };
     let config = match kind.validate(&values, &ctx) {

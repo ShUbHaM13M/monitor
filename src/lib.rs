@@ -3,6 +3,7 @@ pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod domain;
+pub mod mail;
 pub mod notify;
 pub mod web;
 pub mod worker;

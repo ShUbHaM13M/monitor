@@ -3,6 +3,7 @@ pub mod checks;
 pub mod incidents;
 pub mod notifications;
 pub mod pings;
+pub mod user_tokens;
 pub mod users;
 
 use std::time::Duration;

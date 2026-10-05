@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block title %}Confirm your email · Monitor{% endblock %}
+
+{% block content %}
+<section class="auth">
+  {% match state %}
+  {% when VerifyState::Confirm with { token, email } %}
+  <h1>Confirm your email</h1>
+  <form class="card form" method="post" action="/verify-email">
+    <p>Confirm <strong>{{ email }}</strong> as the email address for your Monitor account.</p>
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+    <button type="submit" class="button">Confirm email</button>
+  </form>
+  {% when VerifyState::Done %}
+  <h1>Email confirmed</h1>
+  <p>Thanks! Your email address is confirmed.</p>
+  <p><a href="/dashboard" class="button">Go to your checks</a></p>
+  {% when VerifyState::Invalid %}
+  <h1>Link expired</h1>
+  <p class="muted">This link is invalid, already used or more than 7 days old. Log in and use “Resend” on the banner to get a new one.</p>
+  {% endmatch %}
+</section>
+{% endblock %}

@@ -14,6 +14,9 @@ use crate::web::{AppError, AppState, is_htmx};
 pub struct CurrentUser {
     pub user_id: Uuid,
     pub email: String,
+    pub email_verified: bool,
+    /// Unverified, and email is configured so they can do something about it.
+    pub needs_email_verification: bool,
     pub org: OrgId,
     pub org_name: String,
     pub csrf_token: String,
@@ -41,6 +44,8 @@ pub(super) async fn lookup(
             .map(|row| CurrentUser {
                 user_id: row.user_id,
                 email: row.email,
+                needs_email_verification: !row.email_verified && state.mailer.is_some(),
+                email_verified: row.email_verified,
                 org: OrgId(row.org_id),
                 org_name: row.org_name,
                 csrf_token: row.csrf_token,

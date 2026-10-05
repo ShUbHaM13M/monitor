@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+
+{% block title %}Forgot password · Monitor{% endblock %}
+
+{% block content %}
+<section class="auth">
+  <h1>Forgot your password?</h1>
+  {% if !available %}
+  <p class="form-error">Password reset isn't available: this server can't send email. Ask your administrator.</p>
+  {% else if let Some(sent_to) = sent_to %}
+  <div class="card">
+    <p>If an account exists for <strong>{{ sent_to }}</strong>, we've sent it a link to choose a new password. The link expires in 1 hour.</p>
+    <p class="muted">Nothing arrived? Check your spam folder, or try again in a minute.</p>
+  </div>
+  {% else %}
+  <form class="card form" method="post" action="/forgot-password">
+    <p class="muted">Enter your account's email and we'll send you a link to choose a new password.</p>
+    <label>Email
+      <input type="email" name="email" value="{{ email }}" required autocomplete="email" autofocus>
+    </label>
+    <button type="submit" class="button">Send reset link</button>
+  </form>
+  {% endif %}
+  <p class="muted"><a href="/login">Back to log in</a></p>
+</section>
+{% endblock %}

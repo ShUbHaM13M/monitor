@@ -8,6 +8,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::auth::session;
+use crate::db::user_tokens;
 use crate::web::AppState;
 
 /// Runs all background loops until `shutdown` is cancelled.
@@ -45,7 +46,7 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
 
     let db = state.db.clone();
     tasks.spawn(periodic(
-        "sessions-cleanup",
+        "cleanup",
         Duration::from_secs(60 * 60),
         shutdown.clone(),
         move || {
@@ -54,6 +55,10 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
                 let deleted = session::delete_expired(&db).await?;
                 if deleted > 0 {
                     tracing::info!(deleted, "removed expired sessions");
+                }
+                let deleted = user_tokens::delete_expired(&db).await?;
+                if deleted > 0 {
+                    tracing::info!(deleted, "removed expired account tokens");
                 }
                 Ok(())
             }

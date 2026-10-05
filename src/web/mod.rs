@@ -1,3 +1,4 @@
+mod account;
 mod assets;
 mod auth;
 mod channels;
@@ -25,6 +26,7 @@ use tower_http::trace::TraceLayer;
 use crate::auth::CurrentUser;
 use crate::config::Config;
 use crate::crypto::SecretBox;
+use crate::mail::Mailer;
 use crate::notify::Registry;
 
 pub use error::AppError;
@@ -35,13 +37,20 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub channels: Arc<Registry>,
     pub secrets: Arc<SecretBox>,
+    /// `None` when `SMTP_URL` isn't set: no email channels, verification or resets.
+    pub mailer: Option<Arc<Mailer>>,
 }
 
 impl AppState {
     pub fn new(db: PgPool, config: Arc<Config>) -> anyhow::Result<Self> {
+        let mailer = match &config.smtp_url {
+            Some(url) => Some(Arc::new(Mailer::new(url, &config.smtp_from)?)),
+            None => None,
+        };
         Ok(Self {
             secrets: Arc::new(SecretBox::from_base64(&config.secret_key)?),
-            channels: Arc::new(Registry::from_config(&config)?),
+            channels: Arc::new(Registry::from_config(&config, mailer.clone())),
+            mailer,
             db,
             config,
         })
@@ -79,6 +88,19 @@ pub fn router(state: AppState) -> Router {
         .route("/signup", get(auth::signup_page).post(auth::signup))
         .route("/login", get(auth::login_page).post(auth::login))
         .route("/logout", post(auth::logout))
+        .route(
+            "/verify-email",
+            get(account::verify_page).post(account::verify_confirm),
+        )
+        .route("/verify-email/resend", post(account::resend_verification))
+        .route(
+            "/forgot-password",
+            get(account::forgot_page).post(account::forgot),
+        )
+        .route(
+            "/reset-password",
+            get(account::reset_page).post(account::reset),
+        )
         .route("/healthz", get(pages::healthz))
         .route("/partials/system-status", get(pages::system_status))
         .route("/static/{*path}", get(assets::serve))
@@ -130,6 +152,8 @@ pub fn redirect(headers: &HeaderMap, to: &str) -> Response {
 pub struct Chrome {
     pub user: Option<ChromeUser>,
     pub csrf: String,
+    /// Show the "confirm your email" banner.
+    pub verify_banner: bool,
 }
 
 pub struct ChromeUser {
@@ -142,6 +166,7 @@ impl Chrome {
         Self {
             user: None,
             csrf: String::new(),
+            verify_banner: false,
         }
     }
 
@@ -152,6 +177,7 @@ impl Chrome {
                 org_name: user.org_name.clone(),
             }),
             csrf: user.csrf_token.clone(),
+            verify_banner: user.needs_email_verification,
         }
     }
 }

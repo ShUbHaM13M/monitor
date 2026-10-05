@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -88,4 +88,46 @@ pub async fn find_for_login(db: &PgPool, email: &str) -> sqlx::Result<Option<Log
     )
     .fetch_optional(db)
     .await
+}
+
+pub struct Account {
+    pub id: Uuid,
+    pub email: String,
+    pub email_verified: bool,
+}
+
+pub async fn find_by_email(db: &PgPool, email: &str) -> sqlx::Result<Option<Account>> {
+    sqlx::query_as!(
+        Account,
+        r#"SELECT id, email, email_verified_at IS NOT NULL AS "email_verified!"
+           FROM users WHERE lower(email) = lower($1)"#,
+        email,
+    )
+    .fetch_optional(db)
+    .await
+}
+
+pub async fn mark_email_verified(conn: &mut PgConnection, user_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE users SET email_verified_at = now() WHERE id = $1 AND email_verified_at IS NULL",
+        user_id,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn set_password(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    password_hash: &str,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE users SET password_hash = $2 WHERE id = $1",
+        user_id,
+        password_hash,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
 }
