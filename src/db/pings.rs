@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, TimeDelta, Utc};
+use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -21,6 +22,10 @@ pub struct Ping {
     pub user_agent: Option<String>,
     pub body: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub method: Option<String>,
+    pub headers: Option<Value>,
+    pub body_truncated: bool,
+    pub note: Option<String>,
 }
 
 pub async fn recent(
@@ -32,7 +37,7 @@ pub async fn recent(
     sqlx::query_as!(
         Ping,
         r#"SELECT p.id, p.kind, p.exit_code, p.duration_ms, host(p.source_ip) AS source_ip,
-                  p.user_agent, p.body, p.created_at
+                  p.user_agent, p.body, p.created_at, p.method, p.headers, p.body_truncated, p.note
            FROM pings p
            JOIN checks c ON c.id = p.check_id
            WHERE p.check_id = $1 AND c.org_id = $2
@@ -46,18 +51,87 @@ pub async fn recent(
     .await
 }
 
+#[derive(Default)]
 pub struct PingMeta {
     pub source_ip: Option<IpAddr>,
     pub user_agent: Option<String>,
     pub body: Option<String>,
+    /// Webhook deliveries only.
+    pub method: Option<String>,
+    pub headers: Option<Value>,
+    pub body_truncated: bool,
+}
+
+/// Which endpoint a token arrived on. A token only works on its own endpoint, so
+/// the ping URL can't be used to bypass a webhook's signature check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Endpoint {
+    /// `/p/{token}`: heartbeat checks.
+    Ping,
+    /// `/w/{token}`: inbound webhook monitors.
+    Webhook,
+}
+
+impl Endpoint {
+    fn check_kind(self) -> &'static str {
+        match self {
+            Self::Ping => "heartbeat",
+            Self::Webhook => "webhook",
+        }
+    }
+}
+
+pub struct WebhookTarget {
+    pub id: Uuid,
+    pub signature_scheme: Option<String>,
+    pub signature_header: Option<String>,
+    pub signing_secret_enc: Option<Vec<u8>>,
+}
+
+/// The signature settings of a webhook monitor, by token.
+pub async fn webhook_target(db: &PgPool, token: &str) -> sqlx::Result<Option<WebhookTarget>> {
+    sqlx::query_as!(
+        WebhookTarget,
+        "SELECT id, signature_scheme, signature_header, signing_secret_enc
+         FROM checks WHERE token = $1 AND kind = 'webhook'",
+        token,
+    )
+    .fetch_optional(db)
+    .await
+}
+
+/// Logs a delivery that failed verification. It doesn't count as a heartbeat.
+pub async fn record_rejected(
+    db: &PgPool,
+    check_id: Uuid,
+    meta: PingMeta,
+    reason: &str,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "INSERT INTO pings (check_id, kind, source_ip, user_agent, body, method, headers,
+                            body_truncated, note)
+         VALUES ($1, 'rejected', $2::text::inet, $3, $4, $5, $6, $7, $8)",
+        check_id,
+        meta.source_ip.map(|ip| ip.to_string()),
+        meta.user_agent,
+        meta.body,
+        meta.method,
+        meta.headers,
+        meta.body_truncated,
+        reason,
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// Records a ping and applies it to the check, in one transaction. Looked up by
 /// token, which is the credential here, so this is deliberately not org-scoped.
-/// Returns `false` for an unknown token.
+/// Returns `false` for an unknown token, or one that belongs to the other endpoint.
 pub async fn record(
     db: &PgPool,
     base_url: &str,
+    endpoint: Endpoint,
     token: &str,
     signal: Signal,
     meta: PingMeta,
@@ -69,8 +143,9 @@ pub async fn record(
         r#"SELECT id, org_id, name, status AS "status: CheckStatus", schedule_kind, cron_expr, tz,
                   period_secs, grace_secs, max_runtime_secs, last_start_at, alert_after,
                   now() AS "now!"
-           FROM checks WHERE token = $1 FOR UPDATE"#,
+           FROM checks WHERE token = $1 AND kind = $2 FOR UPDATE"#,
         token,
+        endpoint.check_kind(),
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -86,8 +161,9 @@ pub async fn record(
         _ => None,
     };
     let ping_id = sqlx::query_scalar!(
-        "INSERT INTO pings (check_id, kind, exit_code, duration_ms, source_ip, user_agent, body, created_at)
-         VALUES ($1, $2, $3, $4, $5::text::inet, $6, $7, $8)
+        "INSERT INTO pings (check_id, kind, exit_code, duration_ms, source_ip, user_agent, body,
+                            created_at, method, headers, body_truncated)
+         VALUES ($1, $2, $3, $4, $5::text::inet, $6, $7, $8, $9, $10, $11)
          RETURNING id",
         check.id,
         signal.kind(),
@@ -97,6 +173,9 @@ pub async fn record(
         meta.user_agent,
         meta.body.as_deref(),
         now,
+        meta.method,
+        meta.headers,
+        meta.body_truncated,
     )
     .fetch_one(&mut *tx)
     .await?;

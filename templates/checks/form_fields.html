@@ -4,6 +4,23 @@
   <p class="form-error" role="alert">{{ error }}</p>
   {% endif %}
 
+  {% if form.kind_locked %}
+  {# Fixed after creation; kept as a hidden radio so the CSS below still applies. #}
+  <input type="radio" name="kind" value="{{ form.input.kind }}" checked hidden>
+  {% else %}
+  <fieldset class="choice">
+    <legend>What should we watch?</legend>
+    <label class="radio">
+      <input type="radio" name="kind" value="heartbeat" {% if form.input.kind != "webhook" %}checked{% endif %}>
+      A job that pings us <span class="muted">(cron, worker)</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="kind" value="webhook" {% if form.input.kind == "webhook" %}checked{% endif %}>
+      Webhooks a service sends <span class="muted">(Stripe, GitHub…)</span>
+    </label>
+  </fieldset>
+  {% endif %}
+
   <label>Name
     <input type="text" name="name" value="{{ form.input.name }}" required maxlength="100"
            placeholder="Daily database backup" autofocus>
@@ -22,7 +39,7 @@
   </fieldset>
 
   <div class="period-only row">
-    <label>Expect a ping every
+    <label>Expected at least every
       <input type="number" name="period_value" value="{{ form.input.period_value }}" min="1">
     </label>
     <label>&nbsp;
@@ -65,12 +82,32 @@
       </select>
     </label>
   </div>
-  <small class="muted">How late a ping may be before the check goes down.</small>
+  <small class="muted">How late a ping or webhook may be before the check goes down.</small>
 
-  <label><span>Max run time <span class="muted">(minutes, optional)</span></span>
+  <label class="heartbeat-only"><span>Max run time <span class="muted">(minutes, optional)</span></span>
     <input type="number" name="max_runtime_minutes" value="{{ form.input.max_runtime_minutes }}" min="1">
     <small class="muted">If the job pings <code>/start</code>, it goes down when it hasn't finished within this time.</small>
   </label>
+
+  <fieldset class="choice stacked webhook-only">
+    <legend>Signature verification</legend>
+    <label><span>Signed by <span class="muted">(recommended: forged requests are rejected)</span></span>
+      <select name="signature_scheme">
+        <option value="" {% if form.input.signature_scheme.is_empty() %}selected{% endif %}>Don't verify</option>
+        {% for (id, label) in form.schemes %}
+        <option value="{{ id }}" {% if form.input.signature_scheme == **id %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="generic-only"><span>Signature header</span>
+      <input type="text" name="signature_header" value="{{ form.input.signature_header }}" placeholder="X-Signature" class="mono">
+      <small class="muted">Holds the HMAC-SHA256 of the raw body, as hex (optionally <code>sha256=</code>…) or base64.</small>
+    </label>
+    <label class="signed-only"><span>Signing secret <span class="muted">(stored encrypted)</span></span>
+      <input type="password" name="signing_secret" value="" autocomplete="off"
+             placeholder="{% if form.has_secret %}Saved. Leave blank to keep it{% else %}whsec_…{% endif %}">
+    </label>
+  </fieldset>
 
   {% include "partials/channel_picker.html" %}
 

@@ -370,11 +370,18 @@ async fn check_form_saves_channel_selection(db: PgPool) {
     // New checks offer every channel, ticked.
     let form = send(&ctx.app, get("/checks/new", Some(&ctx.cookie))).await;
     assert_eq!(form.body.matches(r#"name="channel_ids""#).count(), 2);
-    assert_eq!(
-        form.body.matches("checked>").count()
-            - form.body.matches(r#"value="period" checked>"#).count(),
-        2
-    );
+    let ticked = form
+        .body
+        .split(r#"name="channel_ids""#)
+        .skip(1)
+        .filter(|rest| {
+            rest.split('>')
+                .next()
+                .unwrap_or_default()
+                .contains("checked")
+        })
+        .count();
+    assert_eq!(ticked, 2, "both channel checkboxes ticked");
 
     let check = create_check(&ctx.app, &ctx.cookie, &format!("{HOURLY}&channel_ids={a}")).await;
     let linked: Vec<Uuid> =

@@ -1,7 +1,7 @@
 {% for row in rows %}
 <tr>
   <td><span class="pill {{ row.status.css() }}">{{ row.status.label() }}</span></td>
-  <td><a href="/checks/{{ row.id }}">{{ row.name }}</a></td>
+  <td><a href="/checks/{{ row.id }}">{{ row.name }}</a>{% if row.is_webhook %}<span class="tag">webhook</span>{% endif %}</td>
   <td class="mono">{{ row.schedule }}</td>
   <td>{{ row.last_ping }}</td>
   <td>{{ row.next_due }}</td>

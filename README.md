@@ -78,6 +78,24 @@ with a button rather than acting on the GET, because mail scanners prefetch link
 are stored hashed, and each kind can be sent at most once a minute per account. Without
 `SMTP_URL` there is no banner and no reset.
 
+## Webhook monitors
+
+A check of kind *webhook* gets a URL, `POST /w/{token}`, to give to a service such as
+Stripe, GitHub or Shopify. Every delivery counts as a heartbeat, so the usual schedule,
+grace period and missed-ping alerts apply: "Stripe should hit us at least hourly."
+
+- **Signatures (optional, recommended):** Stripe (`Stripe-Signature`, with a 5-minute
+  replay window), GitHub (`X-Hub-Signature-256`), Shopify (`X-Shopify-Hmac-Sha256`), or a
+  generic HMAC-SHA256 of the body in a header you name. They are verified over the raw
+  body with a constant-time compare. The signing secret is encrypted with `SECRET_KEY`,
+  and the endpoint fails closed if it can't be read.
+- **Bad signatures** get `401`. They don't count as heartbeats, and they appear in the
+  delivery log as *rejected*, with the reason.
+- **Delivery log:** method, headers (credentials such as `Authorization` and `Cookie`
+  redacted) and the first 10 KB of the body.
+- **Separate tokens:** a webhook token doesn't work on `/p/` and a ping token doesn't work
+  on `/w/`, so the ping URL can't bypass verification.
+
 ## Uptime monitors
 
 An HTTP monitor requests a URL every 30s to 1h. A check passes when:

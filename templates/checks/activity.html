@@ -3,7 +3,7 @@
      hx-trigger="every 10s [!this.querySelector('details[open]')]" hx-swap="outerHTML">
   <section class="card stats">
     <div><span class="muted">Status</span><span class="pill {{ activity.status.css() }}">{{ activity.status.label() }}</span></div>
-    <div><span class="muted">Last ping</span>{{ activity.last_ping }}</div>
+    <div><span class="muted">{% if activity.is_webhook %}Last delivery{% else %}Last ping{% endif %}</span>{{ activity.last_ping }}</div>
     <div><span class="muted">Next due</span>{{ activity.next_due }}</div>
   </section>
 
@@ -23,12 +23,12 @@
   {% endif %}
 
   <section class="card">
-    <h2>Recent pings</h2>
+    <h2>{% if activity.is_webhook %}Recent deliveries{% else %}Recent pings{% endif %}</h2>
     {% if activity.pings.is_empty() %}
-    <p class="muted">No pings yet. The check stays <em>new</em> until the first one arrives.</p>
+    <p class="muted">Nothing yet. The check stays <em>new</em> until the first {% if activity.is_webhook %}delivery{% else %}ping{% endif %} arrives.</p>
     {% else %}
     <table class="table">
-      <thead><tr><th>Signal</th><th>When</th><th>Duration</th><th>Source</th><th>Output</th></tr></thead>
+      <thead><tr><th>{% if activity.is_webhook %}Result{% else %}Signal{% endif %}</th><th>When</th><th>Duration</th><th>Source</th><th>{% if activity.is_webhook %}Payload{% else %}Output{% endif %}</th></tr></thead>
       <tbody>
         {% for ping in activity.pings %}
         <tr>
@@ -38,8 +38,16 @@
           <td class="muted" title="{% if let Some(ua) = ping.user_agent %}{{ ua }}{% endif %}">
             {% if let Some(ip) = ping.source_ip %}{{ ip }}{% endif %}
           </td>
-          <td>
-            {% if let Some(body) = ping.body %}
+          <td class="delivery">
+            {% if let Some(note) = ping.note %}<div class="note">{{ note }}</div>{% endif %}
+            {% if let Some(headers) = ping.headers %}
+            <details>
+              <summary>{% if let Some(m) = ping.method %}{{ m }} · {% endif %}headers{% if ping.body.is_some() %} &amp; body{% endif %}</summary>
+              <pre class="snippet">{{ headers }}</pre>
+              {% if let Some(body) = ping.body %}<pre class="snippet">{{ body }}{% if ping.body_truncated %}
+… (cut at 10 KB){% endif %}</pre>{% endif %}
+            </details>
+            {% else if let Some(body) = ping.body %}
             <details><summary>show</summary><pre class="snippet">{{ body }}</pre></details>
             {% endif %}
           </td>

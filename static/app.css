@@ -297,3 +297,18 @@ a.small { font-size: 0.85rem; font-weight: 400; }
   background: var(--bg); color: var(--text); font: inherit; resize: vertical;
 }
 .form details label { margin-top: 0.6rem; }
+
+/* ───────── webhook monitors ───────── */
+
+/* Check form: show only the fields that apply, no JS needed. */
+.check-form:has(input[name="kind"][value="webhook"]:checked) .heartbeat-only { display: none; }
+.check-form:not(:has(input[name="kind"][value="webhook"]:checked)) .webhook-only { display: none; }
+.check-form:not(:has(select[name="signature_scheme"] option[value="hmac_sha256"]:checked)) .generic-only { display: none; }
+.check-form:has(select[name="signature_scheme"] option[value=""]:checked) .signed-only { display: none; }
+
+.tag {
+  display: inline-block; margin-left: 0.4rem; padding: 0 0.4rem; border-radius: 4px;
+  font-size: 0.75rem; color: var(--muted); border: 1px solid var(--border); vertical-align: 1px;
+}
+.delivery pre { max-height: 240px; overflow-wrap: anywhere; }
+.delivery .note { color: var(--down); }

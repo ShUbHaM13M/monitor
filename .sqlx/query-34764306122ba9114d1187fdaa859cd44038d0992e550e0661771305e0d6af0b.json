@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO pings (check_id, kind, exit_code, duration_ms, source_ip, user_agent, body, created_at)\n         VALUES ($1, $2, $3, $4, $5::text::inet, $6, $7, $8)\n         RETURNING id",
+  "query": "INSERT INTO pings (check_id, kind, exit_code, duration_ms, source_ip, user_agent, body,\n                            created_at, method, headers, body_truncated)\n         VALUES ($1, $2, $3, $4, $5::text::inet, $6, $7, $8, $9, $10, $11)\n         RETURNING id",
   "describe": {
     "columns": [
       {
@@ -24,12 +24,15 @@
         "Text",
         "Text",
         "Text",
-        "Timestamptz"
+        "Timestamptz",
+        "Text",
+        "Jsonb",
+        "Bool"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "f8024350906ace795035659e05ebff516d5c50054e6d4caa79aa89ec59f76880"
+  "hash": "34764306122ba9114d1187fdaa859cd44038d0992e550e0661771305e0d6af0b"
 }

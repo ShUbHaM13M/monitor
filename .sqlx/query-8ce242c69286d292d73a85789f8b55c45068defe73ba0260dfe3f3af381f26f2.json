@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO pings (check_id, kind, source_ip, user_agent, body, method, headers,\n                            body_truncated, note)\n         VALUES ($1, 'rejected', $2::text::inet, $3, $4, $5, $6, $7, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ce242c69286d292d73a85789f8b55c45068defe73ba0260dfe3f3af381f26f2"
+}

@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, HeaderName, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum_extra::extract::{Form, Query};
 use chrono::{DateTime, Utc};
@@ -10,11 +10,13 @@ use uuid::Uuid;
 
 use super::{AppError, AppState, Chrome, is_htmx, redirect};
 use crate::auth::CurrentUser;
+use crate::crypto::SecretBox;
 use crate::db::channels;
-use crate::db::checks::{self, Check, CheckSpec, CheckStatus};
+use crate::db::checks::{self, Check, CheckKind, CheckSpec, CheckStatus, SignatureSpec};
 use crate::db::incidents::{self, Incident};
 use crate::db::pings::{self, Ping};
 use crate::domain::schedule::Schedule;
+use crate::domain::signature::Scheme;
 use crate::domain::time::{duration, relative, span};
 
 const MAX_NAME: usize = 100;
@@ -28,6 +30,7 @@ const RECENT_INCIDENTS: i64 = 20;
 struct CheckRow {
     id: Uuid,
     name: String,
+    is_webhook: bool,
     status: CheckStatus,
     schedule: String,
     last_ping: String,
@@ -39,6 +42,7 @@ impl CheckRow {
         Self {
             id: check.id,
             name: check.name.clone(),
+            is_webhook: check.is_webhook(),
             status: check.status,
             schedule: schedule_text(check),
             last_ping: check
@@ -112,6 +116,13 @@ pub struct CheckInput {
     max_runtime_minutes: String,
     /// Repeated key, one per ticked checkbox (hence `axum_extra`'s `Form`/`Query`).
     channel_ids: Vec<String>,
+    /// "heartbeat" or "webhook"; only read on create.
+    kind: String,
+    /// Webhook monitors: "" (none) or a `Scheme` id.
+    signature_scheme: String,
+    signature_header: String,
+    /// Never rendered back; blank on edit keeps the stored secret.
+    signing_secret: String,
 }
 
 struct FormView {
@@ -120,6 +131,14 @@ struct FormView {
     input: CheckInput,
     channels: Vec<ChannelChoice>,
     error: Option<String>,
+    /// The kind can't change after creation (the URL a provider calls would).
+    kind_locked: bool,
+    has_secret: bool,
+    schemes: [(&'static str, &'static str); 4],
+}
+
+fn schemes() -> [(&'static str, &'static str); 4] {
+    Scheme::ALL.map(|s| (s.id(), s.label()))
 }
 
 pub(super) struct ChannelChoice {
@@ -171,10 +190,14 @@ impl FormView {
                 tz: "UTC".into(),
                 grace_value: "1".into(),
                 grace_unit: "hours".into(),
+                kind: "heartbeat".into(),
                 ..Default::default()
             },
             channels,
             error: None,
+            kind_locked: false,
+            has_secret: false,
+            schemes: schemes(),
         }
     }
 
@@ -201,9 +224,37 @@ impl FormView {
                     .map(|s| (s / 60).to_string())
                     .unwrap_or_default(),
                 channel_ids: Vec::new(),
+                kind: check.kind.clone(),
+                signature_scheme: check.signature_scheme.clone().unwrap_or_default(),
+                signature_header: check.signature_header.clone().unwrap_or_default(),
+                signing_secret: String::new(),
             },
             channels,
             error: None,
+            kind_locked: true,
+            has_secret: check.has_secret,
+            schemes: schemes(),
+        }
+    }
+
+    /// Re-renders an edit form after a validation error.
+    fn for_edit(
+        check: &Check,
+        mut input: CheckInput,
+        channels: Vec<ChannelChoice>,
+        error: String,
+    ) -> Self {
+        input.kind = check.kind.clone();
+        input.signing_secret.clear();
+        Self {
+            action: format!("/checks/{}", check.id),
+            submit: "Save changes",
+            input,
+            channels,
+            error: Some(error),
+            kind_locked: true,
+            has_secret: check.has_secret,
+            schemes: schemes(),
         }
     }
 }
@@ -243,7 +294,7 @@ pub async fn create(
     headers: HeaderMap,
     Form(input): Form<CheckInput>,
 ) -> Result<Response, AppError> {
-    match parse_spec(&input) {
+    match parse_spec(&input, None, &state.secrets) {
         Ok(spec) => {
             let id = checks::create(&state.db, user.org, &spec).await?;
             Ok(redirect(&headers, &format!("/checks/{id}")))
@@ -252,6 +303,7 @@ pub async fn create(
             let selected = selected_ids(&input);
             let mut form = FormView::blank(channel_choices(&state, &user, Some(&selected)).await?);
             form.input = input;
+            form.input.signing_secret.clear();
             form.error = Some(error);
             form_error(&headers, &user, "New check", form)
         }
@@ -286,7 +338,10 @@ pub async fn update(
     headers: HeaderMap,
     Form(input): Form<CheckInput>,
 ) -> Result<Response, AppError> {
-    match parse_spec(&input) {
+    let existing = checks::get(&state.db, user.org, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    match parse_spec(&input, Some(&existing), &state.secrets) {
         Ok(spec) => {
             if !checks::update(&state.db, user.org, id, &spec).await? {
                 return Err(AppError::NotFound);
@@ -294,18 +349,9 @@ pub async fn update(
             Ok(redirect(&headers, &format!("/checks/{id}")))
         }
         Err(error) => {
-            // Don't render a form for a check this org can't see.
-            checks::get(&state.db, user.org, id)
-                .await?
-                .ok_or(AppError::NotFound)?;
             let selected = selected_ids(&input);
-            let form = FormView {
-                action: format!("/checks/{id}"),
-                submit: "Save changes",
-                input,
-                channels: channel_choices(&state, &user, Some(&selected)).await?,
-                error: Some(error),
-            };
+            let channels = channel_choices(&state, &user, Some(&selected)).await?;
+            let form = FormView::for_edit(&existing, input, channels, error);
             form_error(&headers, &user, "Edit check", form)
         }
     }
@@ -364,9 +410,7 @@ pub async fn preview(
         },
         Ok(schedule) => PreviewPartial {
             lines: Vec::new(),
-            note: Some(format!(
-                "A ping is expected {schedule} after the previous one."
-            )),
+            note: Some(format!("Expected {schedule} after the previous one.")),
             error: None,
         },
         Err(error) => PreviewPartial {
@@ -378,7 +422,23 @@ pub async fn preview(
     Ok(Html(partial.render()?))
 }
 
-fn parse_spec(input: &CheckInput) -> Result<CheckSpec, String> {
+/// `existing` is the check being edited (its kind is fixed, and its stored secret
+/// may be kept).
+fn parse_spec(
+    input: &CheckInput,
+    existing: Option<&Check>,
+    secrets: &SecretBox,
+) -> Result<CheckSpec, String> {
+    let kind = match (existing, input.kind.as_str()) {
+        (Some(check), _) if check.is_webhook() => CheckKind::Webhook,
+        (Some(_), _) | (None, "" | "heartbeat") => CheckKind::Heartbeat,
+        (None, "webhook") => CheckKind::Webhook,
+        (None, _) => return Err("Choose what to monitor.".into()),
+    };
+    let signature = match kind {
+        CheckKind::Webhook => parse_signature(input, existing, secrets)?,
+        CheckKind::Heartbeat => None,
+    };
     let name = input.name.trim();
     if name.is_empty() {
         return Err("Give the check a name.".into());
@@ -402,13 +462,56 @@ fn parse_spec(input: &CheckInput) -> Result<CheckSpec, String> {
         ),
     };
     Ok(CheckSpec {
+        kind,
+        signature,
         name: name.to_owned(),
         schedule,
         // Both bounded above, well within i32.
         grace_secs: grace_secs as i32,
-        max_runtime_secs: max_runtime_secs.map(|s| s as i32),
+        // Webhooks have no runs to time.
+        max_runtime_secs: max_runtime_secs
+            .filter(|_| kind == CheckKind::Heartbeat)
+            .map(|s| s as i32),
         channel_ids: selected_ids(input),
     })
+}
+
+const MAX_SECRET: usize = 512;
+
+fn parse_signature(
+    input: &CheckInput,
+    existing: Option<&Check>,
+    secrets: &SecretBox,
+) -> Result<Option<SignatureSpec>, String> {
+    let scheme = match input.signature_scheme.trim() {
+        "" => return Ok(None),
+        id => Scheme::parse(id).ok_or("Choose a signature type.")?,
+    };
+    let header = match scheme {
+        Scheme::HmacSha256 => {
+            let name = input.signature_header.trim();
+            HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| "Enter the name of the header that carries the signature.")?;
+            Some(name.to_ascii_lowercase())
+        }
+        _ => None,
+    };
+    let secret = input.signing_secret.trim();
+    let secret_enc = if secret.is_empty() {
+        if !existing.is_some_and(|c| c.has_secret) {
+            return Err("Enter the signing secret from the provider.".into());
+        }
+        None // keep the stored one
+    } else if secret.len() > MAX_SECRET {
+        return Err("The signing secret is limited to 512 characters.".into());
+    } else {
+        Some(secrets.seal(secret.as_bytes()))
+    };
+    Ok(Some(SignatureSpec {
+        scheme: scheme.id(),
+        header,
+        secret_enc,
+    }))
 }
 
 fn parse_schedule(input: &CheckInput) -> Result<Schedule, String> {
@@ -462,6 +565,12 @@ struct PingRow {
     source_ip: Option<String>,
     user_agent: Option<String>,
     body: Option<String>,
+    /// Webhook deliveries: method, captured headers (one per line), cut marker.
+    method: Option<String>,
+    headers: Option<String>,
+    body_truncated: bool,
+    /// Why a delivery was rejected.
+    note: Option<String>,
 }
 
 impl PingRow {
@@ -471,8 +580,20 @@ impl PingRow {
             ("exit", Some(code)) => (format!("exit {code}"), "pill-down"),
             ("fail", _) => ("fail".to_owned(), "pill-down"),
             ("start", _) => ("start".to_owned(), "pill-run"),
+            ("webhook", _) => ("received".to_owned(), "pill-up"),
+            ("rejected", _) => ("rejected".to_owned(), "pill-down"),
             (kind, _) => (kind.to_owned(), "pill-up"),
         };
+        let headers = ping
+            .headers
+            .as_ref()
+            .and_then(|h| h.as_object())
+            .map(|map| {
+                map.iter()
+                    .map(|(name, value)| format!("{name}: {}", value.as_str().unwrap_or_default()))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            });
         Self {
             kind,
             css,
@@ -482,6 +603,10 @@ impl PingRow {
             source_ip: ping.source_ip,
             user_agent: ping.user_agent,
             body: ping.body,
+            method: ping.method,
+            headers,
+            body_truncated: ping.body_truncated,
+            note: ping.note,
         }
     }
 }
@@ -523,6 +648,7 @@ impl IncidentRow {
 
 struct Activity {
     id: Uuid,
+    is_webhook: bool,
     status: CheckStatus,
     last_ping: String,
     next_due: String,
@@ -535,6 +661,37 @@ struct Snippets {
     simple: String,
     crontab: Option<String>,
     wrapper: String,
+}
+
+/// What the detail page shows a webhook monitor's owner.
+struct WebhookSetup {
+    url: String,
+    /// e.g. "Stripe", or `None` when unsigned.
+    signed_by: Option<&'static str>,
+    signature_header: Option<String>,
+    /// A test request; only sensible when unsigned.
+    test_curl: Option<String>,
+}
+
+impl WebhookSetup {
+    fn new(base_url: &str, check: &Check) -> Self {
+        let url = format!("{}/w/{}", base_url.trim_end_matches('/'), check.token);
+        let scheme = check.signature_scheme.as_deref().and_then(Scheme::parse);
+        Self {
+            signed_by: scheme.map(Scheme::label),
+            signature_header: scheme.and_then(|s| {
+                s.header()
+                    .map(str::to_owned)
+                    .or_else(|| check.signature_header.clone())
+            }),
+            test_curl: scheme.is_none().then(|| {
+                format!(
+                    "curl -X POST -H 'Content-Type: application/json' -d '{{\"test\":true}}' {url}"
+                )
+            }),
+            url,
+        }
+    }
 }
 
 impl Snippets {
@@ -568,6 +725,7 @@ struct ShowPage {
     max_runtime: Option<String>,
     paused: bool,
     snippets: Snippets,
+    webhook: Option<WebhookSetup>,
     activity: Activity,
 }
 
@@ -594,6 +752,9 @@ pub async fn show(
         max_runtime: check.max_runtime_secs.map(|s| span(s.into())),
         paused: check.status == CheckStatus::Paused,
         snippets: Snippets::new(&state.config.base_url, &check),
+        webhook: check
+            .is_webhook()
+            .then(|| WebhookSetup::new(&state.config.base_url, &check)),
         activity: activity(&state, &user, &check).await?,
     };
     Ok(Html(page.render()?))
@@ -625,6 +786,7 @@ async fn activity(
         incidents::recent_for_check(&state.db, user.org, check.id, RECENT_INCIDENTS).await?;
     Ok(Activity {
         id: check.id,
+        is_webhook: check.is_webhook(),
         status: check.status,
         last_ping: check
             .last_ping_at
@@ -701,6 +863,61 @@ pub(super) fn absolute(t: DateTime<Utc>) -> String {
 mod tests {
     use super::*;
 
+    fn secrets() -> SecretBox {
+        SecretBox::from_base64(&SecretBox::generate_key()).unwrap()
+    }
+
+    fn parse(input: &CheckInput) -> Result<CheckSpec, String> {
+        parse_spec(input, None, &secrets())
+    }
+
+    fn webhook(scheme: &str, secret: &str) -> CheckInput {
+        let mut form = input("period");
+        form.kind = "webhook".into();
+        form.signature_scheme = scheme.into();
+        form.signing_secret = secret.into();
+        form
+    }
+
+    #[test]
+    fn webhook_monitors_need_a_secret_when_signed() {
+        let spec = parse(&webhook("stripe", "whsec_123")).unwrap();
+        assert_eq!(spec.kind, CheckKind::Webhook);
+        let sig = spec.signature.unwrap();
+        assert_eq!(sig.scheme, "stripe");
+        assert!(sig.secret_enc.is_some());
+
+        let unsigned = parse(&webhook("", "")).unwrap();
+        assert!(unsigned.signature.is_none());
+        assert!(
+            parse(&webhook("github", ""))
+                .err()
+                .unwrap()
+                .contains("signing secret")
+        );
+        assert!(
+            parse(&webhook("md5", "x"))
+                .err()
+                .unwrap()
+                .contains("signature type")
+        );
+
+        let mut generic = webhook("hmac_sha256", "k");
+        assert!(parse(&generic).err().unwrap().contains("header"));
+        generic.signature_header = "X-Signature".into();
+        let sig = parse(&generic).unwrap().signature.unwrap();
+        assert_eq!(sig.header.as_deref(), Some("x-signature"));
+    }
+
+    #[test]
+    fn heartbeat_checks_ignore_signature_fields() {
+        let mut form = input("period");
+        form.signature_scheme = "stripe".into();
+        let spec = parse(&form).unwrap();
+        assert_eq!(spec.kind, CheckKind::Heartbeat);
+        assert!(spec.signature.is_none());
+    }
+
     fn input(kind: &str) -> CheckInput {
         let mut form = FormView::blank(Vec::new()).input;
         form.name = "Backup".into();
@@ -710,7 +927,7 @@ mod tests {
 
     #[test]
     fn parses_a_period_check() {
-        let spec = parse_spec(&input("period")).unwrap();
+        let spec = parse(&input("period")).unwrap();
         assert!(matches!(spec.schedule, Schedule::Period { secs: 86_400 }));
         assert_eq!(spec.grace_secs, 3600);
         assert_eq!(spec.max_runtime_secs, None);
@@ -721,7 +938,7 @@ mod tests {
         let mut form = input("cron");
         form.tz = "Asia/Kolkata".into();
         form.max_runtime_minutes = "90".into();
-        let spec = parse_spec(&form).unwrap();
+        let spec = parse(&form).unwrap();
         assert_eq!(spec.schedule.to_string(), "0 2 * * * (Asia/Kolkata)");
         assert_eq!(spec.max_runtime_secs, Some(5400));
     }
@@ -744,7 +961,7 @@ mod tests {
             if expected == "Grace" {
                 form.grace_unit = "days".into();
             }
-            let err = parse_spec(&form).err().expect(expected);
+            let err = parse(&form).err().expect(expected);
             assert!(
                 err.contains(expected),
                 "{err:?} should mention {expected:?}"

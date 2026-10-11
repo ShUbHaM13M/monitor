@@ -32,6 +32,29 @@
   {% if let Some(max_runtime) = max_runtime %} · max run time {{ max_runtime }}{% endif %}
 </p>
 
+{% if let Some(w) = webhook %}
+<section class="card">
+  <h2>Webhook URL</h2>
+  <pre class="snippet"><code>{{ w.url }}</code></pre>
+  <p class="muted">
+    Add it as a webhook endpoint in the sending service. Every delivery counts as a heartbeat;
+    the check goes down if none arrives on schedule.
+  </p>
+  {% if let Some(provider) = w.signed_by %}
+  <p>
+    <span class="pill pill-up">verified</span>
+    Deliveries must carry a valid {{ provider }} signature{% if let Some(h) = w.signature_header %}
+    in <code>{{ h }}</code>{% endif %}. Others are rejected with 401 and shown below as <em>rejected</em>.
+  </p>
+  {% else %}
+  <p class="muted">
+    Signatures aren't verified, so anyone with this URL can send deliveries. Choose the
+    provider under <a href="/checks/{{ id }}/edit">Edit</a> to verify them. To test:
+  </p>
+  {% if let Some(curl) = w.test_curl %}<pre class="snippet"><code>{{ curl }}</code></pre>{% endif %}
+  {% endif %}
+</section>
+{% else %}
 <section class="card">
   <h2>Ping URL</h2>
   <pre class="snippet"><code>{{ snippets.ping_url }}</code></pre>
@@ -50,6 +73,7 @@
     <pre class="snippet"><code>{{ snippets.wrapper }}</code></pre>
   </details>
 </section>
+{% endif %}
 
 {% include "checks/activity.html" %}
 {% endblock %}
