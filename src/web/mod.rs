@@ -5,9 +5,13 @@ mod channels;
 mod charts;
 mod checks;
 mod error;
+mod filter;
+mod incidents;
 mod ingest;
 mod monitors;
+mod overview;
 mod pages;
+mod stamp;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -65,11 +69,14 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(pages::index))
-        .route("/dashboard", get(checks::dashboard))
+        .route("/dashboard", get(overview::page))
+        .route("/dashboard/live", get(overview::live_partial))
+        .route("/nav/health", get(overview::health))
+        .route("/incidents", get(incidents::list))
         .route("/checks/table", get(checks::table))
         .route("/checks/new", get(checks::new_page))
         .route("/checks/preview", get(checks::preview))
-        .route("/checks", post(checks::create))
+        .route("/checks", get(checks::list).post(checks::create))
         .route("/checks/{id}", get(checks::show).post(checks::update))
         .route("/checks/{id}/activity", get(checks::activity_partial))
         .route("/checks/{id}/edit", get(checks::edit_page))

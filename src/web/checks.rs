@@ -1,13 +1,15 @@
 use askama::Template;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderName, StatusCode};
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{AppendHeaders, Html, IntoResponse, Response};
 use axum_extra::extract::{Form, Query};
 use chrono::{DateTime, Utc};
 use chrono_tz::{TZ_VARIANTS, Tz};
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::filter::{self, Chip, ListQuery};
+use super::stamp::Stamp;
 use super::{AppError, AppState, Chrome, is_htmx, redirect};
 use crate::auth::CurrentUser;
 use crate::crypto::SecretBox;
@@ -17,7 +19,7 @@ use crate::db::incidents::{self, Incident};
 use crate::db::pings::{self, Ping};
 use crate::domain::schedule::Schedule;
 use crate::domain::signature::Scheme;
-use crate::domain::time::{duration, relative, span};
+use crate::domain::time::{duration, span};
 
 const MAX_NAME: usize = 100;
 const MAX_GRACE_SECS: i64 = 30 * 24 * 60 * 60;
@@ -25,7 +27,27 @@ const MAX_RUNTIME_MINUTES: i64 = 7 * 24 * 60;
 const RECENT_PINGS: i64 = 50;
 const RECENT_INCIDENTS: i64 = 20;
 
-// ───────────────────────────── dashboard ─────────────────────────────
+// ───────────────────────────── list ─────────────────────────────
+
+/// Filter chips, in display order. Values are the status labels.
+const STATUSES: &[(&str, &str)] = &[
+    ("down", "Down"),
+    ("running", "Running"),
+    ("up", "Up"),
+    ("new", "New"),
+    ("paused", "Paused"),
+];
+
+/// Problems first, then the rest by name.
+fn rank(status: CheckStatus) -> u8 {
+    match status {
+        CheckStatus::Down => 0,
+        CheckStatus::Started => 1,
+        CheckStatus::Up => 2,
+        CheckStatus::New => 3,
+        CheckStatus::Paused => 4,
+    }
+}
 
 struct CheckRow {
     id: Uuid,
@@ -33,8 +55,8 @@ struct CheckRow {
     is_webhook: bool,
     status: CheckStatus,
     schedule: String,
-    last_ping: String,
-    next_due: String,
+    last_ping: Stamp,
+    next_due: Stamp,
 }
 
 impl CheckRow {
@@ -45,58 +67,83 @@ impl CheckRow {
             is_webhook: check.is_webhook(),
             status: check.status,
             schedule: schedule_text(check),
-            last_ping: check
-                .last_ping_at
-                .map_or_else(|| "never".to_owned(), |t| relative(t, now)),
+            last_ping: Stamp::relative_or(check.last_ping_at, now, "never"),
             next_due: next_due(check, now),
         }
     }
 }
 
+/// Filter chips plus the table; swapped as one by the filter form and the poll.
+struct ListBody {
+    chips: Vec<Chip>,
+    rows: Vec<CheckRow>,
+    total: usize,
+}
+
 #[derive(Template)]
-#[template(path = "checks/dashboard.html")]
-struct DashboardPage {
+#[template(path = "checks/list.html")]
+struct ListPage {
     chrome: Chrome,
-    org_name: String,
-    rows: Vec<CheckRow>,
+    query: ListQuery,
+    body: ListBody,
 }
 
 #[derive(Template)]
-#[template(path = "checks/rows.html")]
-struct RowsPartial {
-    rows: Vec<CheckRow>,
+#[template(path = "checks/list_body.html")]
+struct ListBodyPartial {
+    body: ListBody,
 }
 
-pub async fn dashboard(
+pub async fn list(
     State(state): State<AppState>,
     user: CurrentUser,
+    Query(query): Query<ListQuery>,
 ) -> Result<Html<String>, AppError> {
-    let page = DashboardPage {
+    let page = ListPage {
         chrome: Chrome::signed_in(&user),
-        rows: rows(&state, &user).await?,
-        org_name: user.org_name,
+        body: list_body(&state, &user, &query).await?,
+        query,
     };
     Ok(Html(page.render()?))
 }
 
-/// Table body, polled by the dashboard.
+/// The list body, for the filter form and the periodic refresh.
 pub async fn table(
     State(state): State<AppState>,
     user: CurrentUser,
-) -> Result<Html<String>, AppError> {
-    let partial = RowsPartial {
-        rows: rows(&state, &user).await?,
+    Query(query): Query<ListQuery>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    let partial = ListBodyPartial {
+        body: list_body(&state, &user, &query).await?,
     };
-    Ok(Html(partial.render()?))
+    let replace = filter::replace_url(&headers, "check-filters", &query.url("/checks"));
+    Ok((AppendHeaders(replace), Html(partial.render()?)).into_response())
 }
 
-async fn rows(state: &AppState, user: &CurrentUser) -> Result<Vec<CheckRow>, AppError> {
+async fn list_body(
+    state: &AppState,
+    user: &CurrentUser,
+    query: &ListQuery,
+) -> Result<ListBody, AppError> {
     let now = Utc::now();
-    Ok(checks::list(&state.db, user.org)
-        .await?
+    let all = checks::list(&state.db, user.org).await?;
+    let total = all.len();
+    let mut matching: Vec<&Check> = all
         .iter()
-        .map(|c| CheckRow::new(c, now))
-        .collect())
+        .filter(|c| query.matches_text(&[&c.name]))
+        .collect();
+    let chips = query.chips(STATUSES, matching.iter().map(|c| c.status.label()));
+    matching.retain(|c| query.matches_status(c.status.label(), STATUSES));
+    matching.sort_by_cached_key(|c| (rank(c.status), c.name.to_lowercase()));
+    Ok(ListBody {
+        chips,
+        rows: matching
+            .into_iter()
+            .map(|c| CheckRow::new(c, now))
+            .collect(),
+        total,
+    })
 }
 
 // ───────────────────────────── create / edit ─────────────────────────────
@@ -559,8 +606,7 @@ fn split_span(secs: i64) -> (String, String) {
 struct PingRow {
     kind: String,
     css: &'static str,
-    when: String,
-    at: String,
+    when: Stamp,
     duration: Option<String>,
     source_ip: Option<String>,
     user_agent: Option<String>,
@@ -597,8 +643,7 @@ impl PingRow {
         Self {
             kind,
             css,
-            when: relative(ping.created_at, now),
-            at: absolute(ping.created_at),
+            when: Stamp::relative(ping.created_at, now),
             duration: ping.duration_ms.map(|ms| duration(ms.into())),
             source_ip: ping.source_ip,
             user_agent: ping.user_agent,
@@ -611,24 +656,28 @@ impl PingRow {
     }
 }
 
+pub(super) fn reason_label(reason: &str) -> &'static str {
+    match reason {
+        "missed" => "Missed ping",
+        "failed" => "Job failed",
+        "hung" => "Run never finished",
+        "http_down" => "Not responding as expected",
+        "http_slow" => "Responding too slowly",
+        _ => "Down",
+    }
+}
+
 pub(super) struct IncidentRow {
     pub(super) reason: &'static str,
     pub(super) detail: String,
-    pub(super) started: String,
+    pub(super) started: Stamp,
     pub(super) resolution: String,
     pub(super) open: bool,
 }
 
 impl IncidentRow {
     pub(super) fn new(incident: Incident) -> Self {
-        let reason = match incident.reason.as_str() {
-            "missed" => "Missed ping",
-            "failed" => "Job failed",
-            "hung" => "Run never finished",
-            "http_down" => "Not responding as expected",
-            "http_slow" => "Responding too slowly",
-            _ => "Down",
-        };
+        let reason = reason_label(&incident.reason);
         let resolution = match incident.resolved_at {
             Some(end) => format!(
                 "resolved after {}",
@@ -639,7 +688,7 @@ impl IncidentRow {
         Self {
             reason,
             detail: incident.detail.unwrap_or_default(),
-            started: absolute(incident.started_at),
+            started: Stamp::absolute(incident.started_at),
             open: incident.resolved_at.is_none(),
             resolution,
         }
@@ -650,8 +699,8 @@ struct Activity {
     id: Uuid,
     is_webhook: bool,
     status: CheckStatus,
-    last_ping: String,
-    next_due: String,
+    last_ping: Stamp,
+    next_due: Stamp,
     pings: Vec<PingRow>,
     incidents: Vec<IncidentRow>,
 }
@@ -788,9 +837,7 @@ async fn activity(
         id: check.id,
         is_webhook: check.is_webhook(),
         status: check.status,
-        last_ping: check
-            .last_ping_at
-            .map_or_else(|| "never".to_owned(), |t| relative(t, now)),
+        last_ping: Stamp::relative_or(check.last_ping_at, now, "never"),
         next_due: next_due(check, now),
         pings: pings.into_iter().map(|p| PingRow::new(p, now)).collect(),
         incidents: incidents.into_iter().map(IncidentRow::new).collect(),
@@ -835,7 +882,7 @@ pub async fn delete(
     if !checks::delete(&state.db, user.org, id).await? {
         return Err(AppError::NotFound);
     }
-    Ok(redirect(&headers, "/dashboard"))
+    Ok(redirect(&headers, "/checks"))
 }
 
 // ───────────────────────────── helpers ─────────────────────────────
@@ -846,17 +893,13 @@ fn schedule_text(check: &Check) -> String {
         .map_or_else(|_| "invalid schedule".to_owned(), |s| s.to_string())
 }
 
-fn next_due(check: &Check, now: DateTime<Utc>) -> String {
+fn next_due(check: &Check, now: DateTime<Utc>) -> Stamp {
     match (check.status, check.next_expected_at) {
-        (CheckStatus::Up, Some(t)) => relative(t, now),
-        (CheckStatus::Started, _) => "running".to_owned(),
-        (CheckStatus::New, _) => "after first ping".to_owned(),
-        _ => "—".to_owned(),
+        (CheckStatus::Up, Some(t)) => Stamp::relative(t, now),
+        (CheckStatus::Started, _) => Stamp::text("running"),
+        (CheckStatus::New, _) => Stamp::text("after first ping"),
+        _ => Stamp::text("—"),
     }
-}
-
-pub(super) fn absolute(t: DateTime<Utc>) -> String {
-    t.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 
 #[cfg(test)]

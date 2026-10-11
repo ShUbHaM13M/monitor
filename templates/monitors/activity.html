@@ -6,7 +6,7 @@
     <div class="card tile">
       <span class="tile-label">Status</span>
       <span class="tile-value"><span class="pill {{ activity.status.css() }}">{{ activity.status.label() }}</span></span>
-      <span class="muted small-text">checked {{ activity.last_checked }}</span>
+      <span class="muted small-text">checked {{ activity.last_checked|safe }}</span>
     </div>
     {% for tile in activity.tiles %}
     <div class="card tile">
@@ -84,7 +84,7 @@
       {% for incident in activity.incidents %}
       <li class="{% if incident.open %}open{% endif %}">
         <strong>{{ incident.reason }}</strong>
-        <span class="muted">{{ incident.started }} · {{ incident.resolution }}</span>
+        <span class="muted">{{ incident.started|safe }} · {{ incident.resolution }}</span>
         {% if !incident.detail.is_empty() %}<div>{{ incident.detail }}</div>{% endif %}
       </li>
       {% endfor %}
@@ -103,7 +103,7 @@
         {% for r in activity.results %}
         <tr class="{% if !r.ok %}row-fail{% endif %}">
           <td>{% if r.ok %}<span class="pill pill-up">✓ ok</span>{% else %}<span class="pill pill-down">✕ failed</span>{% endif %}</td>
-          <td title="{{ r.at }}">{{ r.when }}</td>
+          <td>{{ r.when|safe }}</td>
           <td class="num">{{ r.status }}</td>
           <td class="num">{{ r.latency }}</td>
           <td class="muted">{{ r.error }}</td>

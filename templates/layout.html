@@ -5,18 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Monitor{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   {# Swap 422 responses so validation errors render in place; htmx skips 4xx by default. #}
   <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
   <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
 </head>
 <body{% if !chrome.csrf.is_empty() %} hx-headers='{"X-CSRF-Token": "{{ chrome.csrf }}"}'{% endif %}>
   <header class="topbar">
     <a class="brand" href="/">◉ Monitor</a>
     <nav>
       {% if let Some(user) = chrome.user %}
-        <a href="/dashboard">Checks</a>
-        <a href="/monitors">Uptime</a>
-        <a href="/channels">Channels</a>
+        <a href="/dashboard" data-nav="/dashboard">Overview
+          {# Fills in after load and refreshes itself; see partials/health.html. #}
+          <span id="health" hidden hx-get="/nav/health" hx-trigger="load" hx-swap="outerHTML"></span></a>
+        <a href="/checks" data-nav="/checks">Checks</a>
+        <a href="/monitors" data-nav="/monitors">Uptime</a>
+        <a href="/incidents" data-nav="/incidents">Incidents</a>
+        <a href="/channels" data-nav="/channels">Channels</a>
         <span class="muted">{{ user.org_name }} · {{ user.email }}</span>
         <form method="post" action="/logout" class="inline">
           <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">

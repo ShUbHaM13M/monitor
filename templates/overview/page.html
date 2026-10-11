@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+
+{% block title %}Overview · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>{{ org_name }}</h1>
+  <div class="actions">
+    <a href="/checks/new" class="button secondary">New check</a>
+    <a href="/monitors/new" class="button secondary">New monitor</a>
+  </div>
+</div>
+
+<div id="overview" hx-get="/dashboard/live" hx-swap="innerHTML"
+     hx-trigger="every 10s [!document.hidden], visibilitychange[!document.hidden] from:document">
+  {% include "overview/live.html" %}
+</div>
+{% endblock %}

@@ -8,7 +8,7 @@
   <a href="/monitors/new" class="button">New monitor</a>
 </div>
 
-{% if rows.is_empty() %}
+{% if body.total == 0 %}
 <section class="card empty">
   <h2>No monitors yet</h2>
   <p class="muted">
@@ -18,13 +18,15 @@
   <a href="/monitors/new" class="button">Monitor your first URL</a>
 </section>
 {% else %}
-<table class="table">
-  <thead>
-    <tr><th>Status</th><th>Name</th><th class="num">Uptime, 24h</th><th class="num">Latency</th><th>Last 24h</th><th>Checked</th></tr>
-  </thead>
-  <tbody hx-get="/monitors/table" hx-trigger="every 10s" hx-swap="innerHTML">
-    {% include "monitors/rows.html" %}
-  </tbody>
-</table>
+{# The form holds the filter state; its body is replaced on every change and refresh. #}
+<form id="monitor-filters" class="filters" role="search"
+      hx-get="/monitors/table" hx-target="#monitor-list" hx-swap="innerHTML"
+      hx-trigger="change, input changed delay:250ms from:#monitor-q, submit">
+  <input type="search" id="monitor-q" name="q" value="{{ query.q }}" placeholder="Search by name or URL" aria-label="Search monitors" autocomplete="off">
+  <div id="monitor-list" hx-get="/monitors/table" hx-include="#monitor-filters"
+       hx-trigger="every 10s [!document.hidden], visibilitychange[!document.hidden] from:document">
+    {% include "monitors/list_body.html" %}
+  </div>
+</form>
 {% endif %}
 {% endblock %}

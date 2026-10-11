@@ -1,0 +1,16 @@
+{% include "partials/chips.html" %}
+{% if body.rows.is_empty() %}
+<p class="card muted">
+  {% if body.total == 0 %}No monitors yet. <a href="/monitors/new">Create one</a>.
+  {% else %}No monitors match. <a href="/monitors">Show all</a>{% endif %}
+</p>
+{% else %}
+<table class="table">
+  <thead>
+    <tr><th>Status</th><th>Name</th><th class="num">Uptime, 24h</th><th class="num">Latency</th><th>Last 24h</th><th>Checked</th></tr>
+  </thead>
+  <tbody>
+    {% include "monitors/rows.html" %}
+  </tbody>
+</table>
+{% endif %}

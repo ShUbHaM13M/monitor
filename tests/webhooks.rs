@@ -368,6 +368,6 @@ async fn secrets_are_encrypted_kept_on_edit_and_cleared_when_unsigned(db: PgPool
 async fn dashboard_tags_webhook_monitors(db: PgPool) {
     let ctx = setup(db).await;
     ctx.create("").await;
-    let dash = send(&ctx.app, get("/dashboard", Some(&ctx.cookie))).await;
+    let dash = send(&ctx.app, get("/checks", Some(&ctx.cookie))).await;
     assert!(dash.body.contains(r#"<span class="tag">webhook</span>"#));
 }

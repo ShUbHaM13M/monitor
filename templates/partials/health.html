@@ -1,0 +1,3 @@
+<span id="health" class="nav-badge" data-down="{{ down }}"{% if down == 0 %} hidden{% endif %}
+      hx-get="/nav/health" hx-trigger="every 20s" hx-swap="outerHTML"
+      title="{{ down }} down">{{ down }}</span>

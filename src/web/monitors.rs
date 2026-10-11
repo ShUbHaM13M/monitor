@@ -1,20 +1,21 @@
 use askama::Template;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{Html, IntoResponse, Response};
-use axum_extra::extract::Form;
+use axum::response::{AppendHeaders, Html, IntoResponse, Response};
+use axum_extra::extract::{Form, Query};
 use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use super::charts::{self, HourInput, LatencyChart, Sparkline};
-use super::checks::{ChannelChoice, IncidentRow, absolute, channel_choices};
+use super::checks::{ChannelChoice, IncidentRow, channel_choices};
+use super::filter::{self, Chip, ListQuery};
+use super::stamp::Stamp;
 use super::{AppError, AppState, Chrome, is_htmx, redirect};
 use crate::auth::CurrentUser;
 use crate::db::channels;
 use crate::db::incidents;
 use crate::db::monitors::{self, Monitor, MonitorSpec, MonitorState, ProbeTarget};
-use crate::domain::time::relative;
 use crate::domain::uptime::{
     INTERVALS, MAX_THRESHOLD, MAX_TIMEOUT_SECS, METHODS, format_headers, parse_headers,
 };
@@ -44,6 +45,24 @@ fn host(url: &str) -> String {
 
 // ───────────────────────────── list ─────────────────────────────
 
+/// Filter chips, in display order. Values are the status labels.
+const STATUSES: &[(&str, &str)] = &[
+    ("down", "Down"),
+    ("up", "Up"),
+    ("new", "New"),
+    ("paused", "Paused"),
+];
+
+/// Problems first, then the rest by name.
+fn rank(status: MonitorState) -> u8 {
+    match status {
+        MonitorState::Down => 0,
+        MonitorState::Up => 1,
+        MonitorState::New => 2,
+        MonitorState::Paused => 3,
+    }
+}
+
 struct MonitorRow {
     id: Uuid,
     name: String,
@@ -51,29 +70,50 @@ struct MonitorRow {
     status: MonitorState,
     uptime: String,
     latency: String,
-    last_checked: String,
+    last_checked: Stamp,
     sparkline: Option<Sparkline>,
+}
+
+/// Filter chips plus the table; swapped as one by the filter form and the poll.
+struct ListBody {
+    chips: Vec<Chip>,
+    rows: Vec<MonitorRow>,
+    total: usize,
 }
 
 #[derive(Template)]
 #[template(path = "monitors/list.html")]
 struct ListPage {
     chrome: Chrome,
-    rows: Vec<MonitorRow>,
+    query: ListQuery,
+    body: ListBody,
 }
 
 #[derive(Template)]
-#[template(path = "monitors/rows.html")]
-struct RowsPartial {
-    rows: Vec<MonitorRow>,
+#[template(path = "monitors/list_body.html")]
+struct ListBodyPartial {
+    body: ListBody,
 }
 
-async fn rows(state: &AppState, user: &CurrentUser) -> Result<Vec<MonitorRow>, AppError> {
+async fn list_body(
+    state: &AppState,
+    user: &CurrentUser,
+    query: &ListQuery,
+) -> Result<ListBody, AppError> {
     let now = Utc::now();
-    let list = monitors::list(&state.db, user.org).await?;
+    let all = monitors::list(&state.db, user.org).await?;
+    let total = all.len();
+    let mut matching: Vec<Monitor> = all
+        .into_iter()
+        .filter(|m| query.matches_text(&[&m.name, &m.url]))
+        .collect();
+    let chips = query.chips(STATUSES, matching.iter().map(|m| m.status.label()));
+    matching.retain(|m| query.matches_status(m.status.label(), STATUSES));
+    matching.sort_by_cached_key(|m| (rank(m.status), m.name.to_lowercase()));
+
     let uptimes = monitors::uptime_24h_by_monitor(&state.db, user.org).await?;
     let mut latencies = monitors::latency_24h_by_monitor(&state.db, user.org).await?;
-    Ok(list
+    let rows = matching
         .into_iter()
         .map(|m| MonitorRow {
             sparkline: latencies
@@ -84,38 +124,41 @@ async fn rows(state: &AppState, user: &CurrentUser) -> Result<Vec<MonitorRow>, A
                 .last_latency_ms
                 .filter(|_| m.last_status_code.is_some())
                 .map_or_else(|| "—".to_owned(), |ms| format!("{ms} ms")),
-            last_checked: m
-                .last_checked_at
-                .map_or_else(|| "not yet".to_owned(), |t| relative(t, now)),
+            last_checked: Stamp::relative_or(m.last_checked_at, now, "not yet"),
             host: host(&m.url),
             id: m.id,
             name: m.name,
             status: m.status,
         })
-        .collect())
+        .collect();
+    Ok(ListBody { chips, rows, total })
 }
 
 pub async fn list(
     State(state): State<AppState>,
     user: CurrentUser,
+    Query(query): Query<ListQuery>,
 ) -> Result<Html<String>, AppError> {
     let page = ListPage {
         chrome: Chrome::signed_in(&user),
-        rows: rows(&state, &user).await?,
+        body: list_body(&state, &user, &query).await?,
+        query,
     };
     Ok(Html(page.render()?))
 }
 
+/// The list body, for the filter form and the periodic refresh.
 pub async fn table(
     State(state): State<AppState>,
     user: CurrentUser,
-) -> Result<Html<String>, AppError> {
-    Ok(Html(
-        RowsPartial {
-            rows: rows(&state, &user).await?,
-        }
-        .render()?,
-    ))
+    Query(query): Query<ListQuery>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    let partial = ListBodyPartial {
+        body: list_body(&state, &user, &query).await?,
+    };
+    let replace = filter::replace_url(&headers, "monitor-filters", &query.url("/monitors"));
+    Ok((AppendHeaders(replace), Html(partial.render()?)).into_response())
 }
 
 // ───────────────────────────── create / edit ─────────────────────────────
@@ -423,8 +466,7 @@ fn parse_spec(state: &AppState, input: &MonitorInput) -> Result<MonitorSpec, Str
 
 struct ResultView {
     ok: bool,
-    when: String,
-    at: String,
+    when: Stamp,
     status: String,
     latency: String,
     error: String,
@@ -439,7 +481,7 @@ struct Activity {
     id: Uuid,
     status: MonitorState,
     last_error: Option<String>,
-    last_checked: String,
+    last_checked: Stamp,
     tiles: Vec<Tile>,
     chart: Option<LatencyChart>,
     results: Vec<ResultView>,
@@ -495,8 +537,7 @@ async fn activity(state: &AppState, user: &CurrentUser, m: &Monitor) -> Result<A
         .into_iter()
         .map(|r| ResultView {
             ok: r.ok,
-            when: relative(r.created_at, now),
-            at: absolute(r.created_at),
+            when: Stamp::relative(r.created_at, now),
             status: r
                 .status_code
                 .map_or_else(|| "—".to_owned(), |s| s.to_string()),
@@ -516,9 +557,7 @@ async fn activity(state: &AppState, user: &CurrentUser, m: &Monitor) -> Result<A
         id: m.id,
         status: m.status,
         last_error: m.last_error.clone(),
-        last_checked: m
-            .last_checked_at
-            .map_or_else(|| "not yet".to_owned(), |t| relative(t, now)),
+        last_checked: Stamp::relative_or(m.last_checked_at, now, "not yet"),
         tiles,
         chart: charts::latency_chart(&hours, now),
         results,

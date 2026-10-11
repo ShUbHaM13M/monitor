@@ -240,11 +240,11 @@ async fn users_only_see_their_own_org(db: PgPool) {
 
     let alice_check = create_check(&app, &alice, "name=Alice+secret+backup&schedule_kind=period&period_value=1&period_unit=days&grace_value=1&grace_unit=hours").await;
 
-    let alice_dash = send(&app, get("/dashboard", Some(&alice))).await;
+    let alice_dash = send(&app, get("/checks", Some(&alice))).await;
     assert!(alice_dash.body.contains("Alice secret backup"));
     assert!(alice_dash.body.contains("alice&#39;s org") || alice_dash.body.contains("alice's org"));
 
-    let bob_dash = send(&app, get("/dashboard", Some(&bob))).await;
+    let bob_dash = send(&app, get("/checks", Some(&bob))).await;
     assert_eq!(bob_dash.status, StatusCode::OK);
     assert!(!bob_dash.body.contains("Alice secret backup"));
     assert!(!bob_dash.body.contains("alice"));

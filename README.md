@@ -56,7 +56,7 @@ All settings are flags or environment variables; see `monitor --help` and `.env.
 ```
 migrations/   SQL migrations (embedded into the binary)
 templates/    askama templates; partials/ are htmx fragments
-static/       CSS and vendored htmx, embedded in release builds
+static/       CSS, vendored htmx and app.js (local times, copy buttons, tab title), embedded in release builds
 src/
   auth/       passwords, sessions, CSRF, CurrentUser/OrgId extractors
   config.rs   CLI / env configuration
@@ -68,6 +68,20 @@ src/
   worker/     background loops: deadline scheduler, HTTP prober, rollups, alert notifier, cleanup
               (work is claimed with FOR UPDATE SKIP LOCKED, so workers can scale out)
 ```
+
+## Dashboard
+
+`/dashboard` is the overview. It shows a one-line verdict (down, alerts at risk, or all
+good), status counts that link to the filtered lists, what's down right now, alert-delivery
+problems (no channels, unconfirmed channels, alerts that gave up after every retry in the last
+24 hours) and recently resolved incidents. `/incidents` has the full history for the org, 50
+per page. The Checks and Uptime lists put problems first and can be filtered by status and
+searched; the filter is kept in the URL.
+
+Pages refresh with htmx polling every 10 seconds, paused while the tab is hidden. The nav
+badge keeps polling in hidden tabs and mirrors the down count into the tab title and favicon.
+`static/app.js` shows times in the viewer's timezone and adds copy buttons to snippets.
+Without JavaScript, times are shown in UTC and the snippets are plain selectable text.
 
 ## Accounts
 

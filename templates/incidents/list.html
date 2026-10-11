@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+
+{% block title %}Incidents · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Incidents</h1>
+</div>
+
+<nav class="chips" aria-label="Filter incidents">
+  {% for tab in tabs %}
+  <a class="chip{% if tab.selected %} selected{% endif %}" href="/incidents{% if !tab.value.is_empty() %}?state={{ tab.value }}{% endif %}"
+     {% if tab.selected %}aria-current="page"{% endif %}>{{ tab.label }}</a>
+  {% endfor %}
+</nav>
+
+{% if items.is_empty() %}
+<section class="card empty">
+  {% if paged %}
+  <p class="muted">No older incidents.</p>
+  {% else if state == "open" %}
+  <h2>Nothing is down</h2>
+  <p class="muted">Every check and monitor is fine right now.</p>
+  {% else %}
+  <h2>No incidents yet</h2>
+  <p class="muted">
+    An incident opens when a check misses its ping or fails, or a monitor stops responding as
+    expected. It closes when things recover, and the whole history is kept here.
+  </p>
+  {% endif %}
+</section>
+{% else %}
+{% include "partials/incident_table.html" %}
+{% endif %}
+
+<p class="pager">
+  {% if paged %}<a href="/incidents{% if !state.is_empty() %}?state={{ state }}{% endif %}">← Newest</a>{% endif %}
+  {% if let Some(q) = older %}<a href="/incidents?{{ q }}">Older →</a>{% endif %}
+</p>
+{% endblock %}

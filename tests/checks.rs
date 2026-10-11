@@ -60,7 +60,7 @@ async fn created_check_shows_ping_url_and_starts_as_new(db: PgPool) {
     assert!(page.body.contains("every 1 hour"));
     assert_eq!(token.len(), 22);
 
-    let dash = send(&app, get("/dashboard", Some(&cookie))).await;
+    let dash = send(&app, get("/checks", Some(&cookie))).await;
     assert!(dash.body.contains("Nightly backup"));
     assert!(dash.body.contains("after first ping"));
     assert_eq!(status_of(&db, id).await, "new");
@@ -222,7 +222,7 @@ async fn pause_resume_and_delete(db: PgPool) {
     )
     .await;
     assert_eq!(res.status, StatusCode::SEE_OTHER);
-    assert_eq!(res.header("location"), "/dashboard");
+    assert_eq!(res.header("location"), "/checks");
     assert_eq!(count(&db, "SELECT count(*) FROM checks").await, 0);
     assert_eq!(
         count(&db, "SELECT count(*) FROM pings").await,

@@ -1,0 +1,102 @@
+{% match live.verdict %}
+{% when Verdict::Empty %}
+<section class="card empty">
+  <h2>Get started</h2>
+  <p class="muted">Three steps and you'll hear about broken jobs and sites before your users do.</p>
+  <ol class="steps">
+    <li class="{% if live.checks.total > 0 %}done{% endif %}">
+      <a href="/checks/new">Create a check</a> for a cron job, worker or incoming webhook.
+      <span class="muted">Your job calls its URL when it finishes; a missed call means trouble.</span>
+    </li>
+    <li class="{% if live.monitors.total > 0 %}done{% endif %}">
+      <a href="/monitors/new">Monitor a URL</a> for uptime and response time.
+    </li>
+    <li class="{% if live.channels_total > 0 %}done{% endif %}">
+      <a href="/channels/new">Add an alert channel</a> (email or webhook) so alerts reach you.
+    </li>
+  </ol>
+</section>
+{% when Verdict::Down(n) %}
+<div class="verdict verdict-down" role="status">
+  <strong>{{ n }} down</strong>
+  <span>{{ live.down_names() }}</span>
+</div>
+{% when Verdict::AlertsAtRisk %}
+<div class="verdict verdict-warn" role="status">
+  <strong>Everything is up</strong>
+  <span>but alerts may not reach you; see below.</span>
+</div>
+{% when Verdict::AllGood %}
+<div class="verdict verdict-ok" role="status">
+  <strong>All systems operational</strong>
+  <span>{{ live.up_summary() }}</span>
+</div>
+{% endmatch %}
+
+{% if live.verdict != Verdict::Empty %}
+<div class="groups">
+  {% for g in live.groups() %}
+  <section class="card group">
+    <div class="group-head">
+      <h2><a href="{{ g.href }}">{{ g.title }}</a></h2>
+      <span class="muted">{{ g.total }} total</span>
+    </div>
+    {% if g.total == 0 %}
+    <p class="muted">None yet. <a href="{{ g.new_href }}">Create a {{ g.noun }}</a>.</p>
+    {% else %}
+    <div class="counts">
+      {% for c in g.counts %}
+      <a class="tally" href="{{ c.href }}"><strong>{{ c.count }}</strong> <span class="pill {{ c.css }}">{{ c.label }}</span></a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if !live.open.is_empty() %}
+<section class="card">
+  <h2>Down right now</h2>
+  {% let items = live.open.as_slice() %}
+  {% include "partials/incident_table.html" %}
+</section>
+{% endif %}
+
+{% if live.verdict != Verdict::Empty && (live.channels_total == 0 || live.channels_unverified > 0 || !live.failing.is_empty()) %}
+<section class="card notice">
+  <h2>Alerts</h2>
+  <ul class="warnings">
+    {% if live.channels_total == 0 %}
+    <li>No alert channels, so nothing will notify you when something goes down. <a href="/channels/new">Add a channel</a>.</li>
+    {% else if live.channels_unverified > 0 %}
+    <li>
+      {{ live.channels_unverified }} channel{% if live.channels_unverified != 1 %}s are{% else %} is{% endif %}
+      waiting for the recipient to confirm and won't get alerts until then. <a href="/channels">Channels</a>
+    </li>
+    {% endif %}
+    {% for c in live.failing %}
+    <li>
+      <a href="/channels/{{ c.id }}">{{ c.name }}</a>:
+      {{ c.failed }} alert{% if c.failed != 1 %}s{% endif %} couldn't be delivered in the last 24 hours, most recently {{ c.last_at|safe }}.
+      {% if !c.last_error.is_empty() %}<div class="muted small-text">{{ c.last_error }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if live.verdict != Verdict::Empty %}
+<section class="card">
+  <div class="group-head">
+    <h2>Recently resolved</h2>
+    <a href="/incidents">All incidents →</a>
+  </div>
+  {% if live.resolved.is_empty() %}
+  <p class="muted">No incidents yet.</p>
+  {% else %}
+  {% let items = live.resolved.as_slice() %}
+  {% include "partials/incident_table.html" %}
+  {% endif %}
+</section>
+{% endif %}

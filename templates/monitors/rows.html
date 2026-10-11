@@ -1,4 +1,4 @@
-{% for row in rows %}
+{% for row in body.rows %}
 <tr>
   <td><span class="pill {{ row.status.css() }}">{{ row.status.label() }}</span></td>
   <td><a href="/monitors/{{ row.id }}">{{ row.name }}</a><div class="muted small-text">{{ row.host }}</div></td>
@@ -14,6 +14,6 @@
     </svg>
     {% else %}<span class="muted">—</span>{% endif %}
   </td>
-  <td class="muted">{{ row.last_checked }}</td>
+  <td class="muted">{{ row.last_checked|safe }}</td>
 </tr>
 {% endfor %}

@@ -1,0 +1,10 @@
+{# Status filter. Radios inside the filter form, so a click submits it via `change`. #}
+<fieldset class="chips">
+  <legend class="visually-hidden">Status</legend>
+  {% for chip in body.chips %}
+  <label class="chip{% if chip.selected %} selected{% endif %}">
+    <input type="radio" name="status" value="{{ chip.value }}"{% if chip.selected %} checked{% endif %}>
+    {{ chip.label }} <span class="count">{{ chip.count }}</span>
+  </label>
+  {% endfor %}
+</fieldset>

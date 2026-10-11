@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+
+{% block title %}Checks · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Checks</h1>
+  <a href="/checks/new" class="button">New check</a>
+</div>
+
+{% if body.total == 0 %}
+<section class="card empty">
+  <h2>No checks yet</h2>
+  <p class="muted">
+    Create a check for each cron job or worker, then call its ping URL whenever the job finishes.
+    If a ping doesn't arrive on time, the check goes down. A check can also watch for webhooks
+    from a service like Stripe or GitHub.
+  </p>
+  <pre class="snippet"><code>0 2 * * * /usr/local/bin/backup.sh &amp;&amp; curl -fsS -m 10 --retry 3 https://…/p/&lt;token&gt;</code></pre>
+  <a href="/checks/new" class="button">Create your first check</a>
+</section>
+{% else %}
+{# The form holds the filter state; its body is replaced on every change and refresh. #}
+<form id="check-filters" class="filters" role="search"
+      hx-get="/checks/table" hx-target="#check-list" hx-swap="innerHTML"
+      hx-trigger="change, input changed delay:250ms from:#check-q, submit">
+  <input type="search" id="check-q" name="q" value="{{ query.q }}" placeholder="Search by name" aria-label="Search checks" autocomplete="off">
+  <div id="check-list" hx-get="/checks/table" hx-include="#check-filters"
+       hx-trigger="every 10s [!document.hidden], visibilitychange[!document.hidden] from:document">
+    {% include "checks/list_body.html" %}
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,125 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.reason, i.detail, i.started_at, i.resolved_at, i.check_id, i.monitor_id,\n                  COALESCE(c.name, m.name) AS \"target_name!\",\n                  COALESCE(c.kind, 'http') AS \"target_kind!\",\n                  COALESCE(c.status, m.status) AS \"target_status!\"\n           FROM incidents i\n           LEFT JOIN checks c ON c.id = i.check_id\n           LEFT JOIN http_monitors m ON m.id = i.monitor_id\n           WHERE i.org_id = $1\n             AND ($2::bool IS NULL OR (i.resolved_at IS NULL) = $2)\n             AND ($3::timestamptz IS NULL OR (i.started_at, i.id) < ($3, $4::uuid))\n           ORDER BY i.started_at DESC, i.id DESC\n           LIMIT $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "reason",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "reason"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "detail",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "detail"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "resolved_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "resolved_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "check_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "check_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "monitor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "monitor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "target_name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "target_kind!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "target_status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8ed1494f920b4eee4b5fd5d8f1668093664dce62153d7a339da818cf1f16c465"
+}

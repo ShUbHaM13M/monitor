@@ -118,6 +118,68 @@ pub async fn recent_for_monitor(
     .await
 }
 
+/// An incident with the check or monitor it belongs to, for org-wide lists.
+pub struct OrgIncident {
+    pub id: Uuid,
+    pub reason: String,
+    pub detail: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub check_id: Option<Uuid>,
+    pub monitor_id: Option<Uuid>,
+    pub target_name: String,
+    /// "heartbeat" or "webhook" for checks, "http" for monitors.
+    pub target_kind: String,
+    pub target_status: String,
+}
+
+/// Which incidents `list_for_org` returns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncidentState {
+    All,
+    Open,
+    Resolved,
+}
+
+/// Newest first. `before` is the `(started_at, id)` of the last incident on
+/// the previous page.
+pub async fn list_for_org(
+    db: &PgPool,
+    org: OrgId,
+    state: IncidentState,
+    before: Option<(DateTime<Utc>, Uuid)>,
+    limit: i64,
+) -> sqlx::Result<Vec<OrgIncident>> {
+    let open = match state {
+        IncidentState::All => None,
+        IncidentState::Open => Some(true),
+        IncidentState::Resolved => Some(false),
+    };
+    let (before_at, before_id) = before.unzip();
+    sqlx::query_as!(
+        OrgIncident,
+        r#"SELECT i.id, i.reason, i.detail, i.started_at, i.resolved_at, i.check_id, i.monitor_id,
+                  COALESCE(c.name, m.name) AS "target_name!",
+                  COALESCE(c.kind, 'http') AS "target_kind!",
+                  COALESCE(c.status, m.status) AS "target_status!"
+           FROM incidents i
+           LEFT JOIN checks c ON c.id = i.check_id
+           LEFT JOIN http_monitors m ON m.id = i.monitor_id
+           WHERE i.org_id = $1
+             AND ($2::bool IS NULL OR (i.resolved_at IS NULL) = $2)
+             AND ($3::timestamptz IS NULL OR (i.started_at, i.id) < ($3, $4::uuid))
+           ORDER BY i.started_at DESC, i.id DESC
+           LIMIT $5"#,
+        org.get(),
+        open,
+        before_at,
+        before_id,
+        limit,
+    )
+    .fetch_all(db)
+    .await
+}
+
 pub async fn recent_for_check(
     db: &PgPool,
     org: OrgId,

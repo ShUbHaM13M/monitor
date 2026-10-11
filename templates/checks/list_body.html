@@ -1,0 +1,16 @@
+{% include "partials/chips.html" %}
+{% if body.rows.is_empty() %}
+<p class="card muted">
+  {% if body.total == 0 %}No checks yet. <a href="/checks/new">Create one</a>.
+  {% else %}No checks match. <a href="/checks">Show all</a>{% endif %}
+</p>
+{% else %}
+<table class="table">
+  <thead>
+    <tr><th>Status</th><th>Name</th><th>Schedule</th><th>Last ping</th><th>Next due</th></tr>
+  </thead>
+  <tbody>
+    {% include "checks/rows.html" %}
+  </tbody>
+</table>
+{% endif %}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM checks WHERE org_id = $1 AND status = 'down')\n                + (SELECT count(*) FROM http_monitors WHERE org_id = $1 AND status = 'down')\n                AS \"count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "75c5bf2237b75dcbcd37289cb810f0af003f9c9732f5631856a3b3c1b1af6f14"
+}
