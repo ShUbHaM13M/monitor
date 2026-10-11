@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.ok, r.status_code, r.latency_ms, r.error, r.created_at\n         FROM http_results r JOIN http_monitors m ON m.id = r.monitor_id\n         WHERE r.monitor_id = $1 AND m.org_id = $2\n         ORDER BY r.created_at DESC, r.id DESC\n         LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ok",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "http_results",
+            "name": "ok"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "status_code",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "http_results",
+            "name": "status_code"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "latency_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_results",
+            "name": "latency_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "http_results",
+            "name": "error"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "http_results",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "9909e385406ad677fb8a1150e23250b2731a13419b82158999047f04312a0c14"
+}

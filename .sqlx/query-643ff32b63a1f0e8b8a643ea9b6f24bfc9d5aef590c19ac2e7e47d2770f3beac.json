@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE http_monitors SET status = 'paused', updated_at = now()\n         WHERE id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "643ff32b63a1f0e8b8a643ea9b6f24bfc9d5aef590c19ac2e7e47d2770f3beac"
+}

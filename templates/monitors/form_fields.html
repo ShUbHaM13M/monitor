@@ -1,0 +1,64 @@
+<form class="card form" method="post" action="{{ form.action }}"
+      hx-post="{{ form.action }}" hx-target="this" hx-swap="outerHTML">
+  {% if let Some(error) = form.error %}
+  <p class="form-error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  <label>Name
+    <input type="text" name="name" value="{{ form.input.name }}" required maxlength="100" placeholder="Public API" autofocus>
+  </label>
+
+  <div class="row">
+    <label>Method
+      <select name="method">
+        {% for m in methods %}<option value="{{ m }}" {% if form.input.method == **m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="grow">URL
+      <input type="url" name="url" value="{{ form.input.url }}" required placeholder="https://api.example.com/health">
+    </label>
+  </div>
+
+  <div class="row">
+    <label class="grow">Check every
+      <select name="interval_secs">
+        {% for (secs, label) in intervals %}<option value="{{ secs }}" {% if form.input.interval_secs == secs.to_string() %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="grow">Timeout <span class="muted">(seconds)</span>
+      <input type="number" name="timeout_secs" value="{{ form.input.timeout_secs }}" min="1" max="30">
+    </label>
+    <label class="grow">Alert after
+      <input type="number" name="fail_threshold" value="{{ form.input.fail_threshold }}" min="1" max="10">
+      <small class="muted">failed checks in a row</small>
+    </label>
+  </div>
+
+  <fieldset class="choice stacked">
+    <legend>A check passes when</legend>
+    <label><span>The status is <span class="muted">(optional; default any 2xx or 3xx)</span></span>
+      <input type="number" name="expected_status" value="{{ form.input.expected_status }}" min="100" max="599" placeholder="200">
+    </label>
+    <label><span>The response contains <span class="muted">(optional)</span></span>
+      <input type="text" name="body_contains" value="{{ form.input.body_contains }}" maxlength="1000" placeholder='"status":"ok"'>
+    </label>
+    <label><span>It responds within <span class="muted">(milliseconds, optional)</span></span>
+      <input type="number" name="max_latency_ms" value="{{ form.input.max_latency_ms }}" min="1" placeholder="2000">
+      <small class="muted">Slower responses count as failed checks.</small>
+    </label>
+  </fieldset>
+
+  <details {% if !form.input.headers.is_empty() || !form.input.body.is_empty() %}open{% endif %}>
+    <summary>Request headers and body</summary>
+    <label><span>Headers <span class="muted">(one per line, stored encrypted)</span></span>
+      <textarea name="headers" rows="3" class="mono" placeholder="Authorization: Bearer …">{{ form.input.headers }}</textarea>
+    </label>
+    <label><span>Body <span class="muted">(for POST, PUT, PATCH)</span></span>
+      <textarea name="body" rows="3" class="mono">{{ form.input.body }}</textarea>
+    </label>
+  </details>
+
+  {% include "partials/channel_picker.html" %}
+
+  <button type="submit" class="button">{{ form.submit }}</button>
+</form>

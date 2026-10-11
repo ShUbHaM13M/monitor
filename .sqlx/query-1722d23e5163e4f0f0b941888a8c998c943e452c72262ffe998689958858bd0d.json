@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE http_monitors m\n         SET next_run_at = now() + make_interval(secs => m.interval_secs)\n         FROM (\n             SELECT id FROM http_monitors\n             WHERE status <> 'paused' AND next_run_at <= now()\n             ORDER BY next_run_at\n             LIMIT $1\n             FOR UPDATE SKIP LOCKED\n         ) due\n         WHERE m.id = due.id\n         RETURNING m.id, m.url, m.method, m.headers_enc, m.body, m.timeout_ms,\n                   m.expected_status, m.body_contains, m.max_latency_ms",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "method",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "method"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "headers_enc",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "headers_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "timeout_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "timeout_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "expected_status",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "expected_status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "body_contains",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "body_contains"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "max_latency_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_monitors",
+            "name": "max_latency_ms"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1722d23e5163e4f0f0b941888a8c998c943e452c72262ffe998689958858bd0d"
+}

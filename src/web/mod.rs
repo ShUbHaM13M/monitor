@@ -2,9 +2,11 @@ mod account;
 mod assets;
 mod auth;
 mod channels;
+mod charts;
 mod checks;
 mod error;
 mod ingest;
+mod monitors;
 mod pages;
 
 use std::net::SocketAddr;
@@ -39,6 +41,8 @@ pub struct AppState {
     pub secrets: Arc<SecretBox>,
     /// `None` when `SMTP_URL` isn't set: no email channels, verification or resets.
     pub mailer: Option<Arc<Mailer>>,
+    /// SSRF-guarded client for user-supplied URLs (HTTP monitors).
+    pub http: reqwest::Client,
 }
 
 impl AppState {
@@ -50,6 +54,7 @@ impl AppState {
         Ok(Self {
             secrets: Arc::new(SecretBox::from_base64(&config.secret_key)?),
             channels: Arc::new(Registry::from_config(&config, mailer.clone())),
+            http: crate::notify::http::client(config.allow_private_targets),
             mailer,
             db,
             config,
@@ -71,6 +76,16 @@ pub fn router(state: AppState) -> Router {
         .route("/checks/{id}/pause", post(checks::pause))
         .route("/checks/{id}/resume", post(checks::resume))
         .route("/checks/{id}/delete", post(checks::delete))
+        .route("/monitors", get(monitors::list).post(monitors::create))
+        .route("/monitors/table", get(monitors::table))
+        .route("/monitors/new", get(monitors::new_page))
+        .route("/monitors/{id}", get(monitors::show).post(monitors::update))
+        .route("/monitors/{id}/activity", get(monitors::activity_partial))
+        .route("/monitors/{id}/edit", get(monitors::edit_page))
+        .route("/monitors/{id}/check", post(monitors::check_now))
+        .route("/monitors/{id}/pause", post(monitors::pause))
+        .route("/monitors/{id}/resume", post(monitors::resume))
+        .route("/monitors/{id}/delete", post(monitors::delete))
         .route("/channels", get(channels::list))
         .route("/channels/new", get(channels::new_picker))
         .route(

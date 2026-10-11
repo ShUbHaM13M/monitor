@@ -1,0 +1,12 @@
+{# Expects `form.channels: Vec<ChannelChoice>`. #}
+  <fieldset class="choice stacked">
+    <legend>Alert channels</legend>
+    {% for channel in form.channels %}
+    <label class="radio">
+      <input type="checkbox" name="channel_ids" value="{{ channel.id }}" {% if channel.checked %}checked{% endif %}>
+      {{ channel.name }} <span class="muted">{{ channel.kind }}{% if !channel.verified %} · awaiting confirmation{% endif %}</span>
+    </label>
+    {% else %}
+    <p class="muted">No channels yet. <a href="/channels/new">Add one</a> to get alerted when this goes down.</p>
+    {% endfor %}
+  </fieldset>

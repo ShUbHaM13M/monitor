@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ title }} · Monitor{% endblock %}
+
+{% block content %}
+<section class="narrow">
+  <p class="muted"><a href="/monitors">← Uptime</a></p>
+  <h1>{{ title }}</h1>
+  {% include "monitors/form_fields.html" %}
+</section>
+{% endblock %}

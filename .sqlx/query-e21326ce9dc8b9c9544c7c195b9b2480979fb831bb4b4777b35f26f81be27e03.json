@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO http_rollups (monitor_id, bucket_hour, count, fail_count, avg_ms, p50_ms, p95_ms)\n         SELECT monitor_id, date_trunc('hour', created_at), count(*), count(*) FILTER (WHERE NOT ok),\n                avg(latency_ms) FILTER (WHERE status_code IS NOT NULL),\n                percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE status_code IS NOT NULL),\n                percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE status_code IS NOT NULL)\n         FROM http_results\n         WHERE created_at >= date_trunc('hour', now()) - interval '1 hour'\n         GROUP BY 1, 2\n         ON CONFLICT (monitor_id, bucket_hour) DO UPDATE\n         SET count = excluded.count, fail_count = excluded.fail_count, avg_ms = excluded.avg_ms,\n             p50_ms = excluded.p50_ms, p95_ms = excluded.p95_ms",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e21326ce9dc8b9c9544c7c195b9b2480979fb831bb4b4777b35f26f81be27e03"
+}

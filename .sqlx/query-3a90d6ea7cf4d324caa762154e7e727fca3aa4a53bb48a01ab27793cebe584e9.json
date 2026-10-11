@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO monitor_channels (monitor_id, channel_id, org_id)\n             SELECT m.id, $1, m.org_id FROM http_monitors m WHERE m.org_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a90d6ea7cf4d324caa762154e7e727fca3aa4a53bb48a01ab27793cebe584e9"
+}

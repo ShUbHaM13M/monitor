@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ch.id, ch.kind, ch.name, ch.config_enc, ch.verified_at, ch.created_at,\n                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id) AS \"check_count!\",\n                  last.status AS \"last_status?\", last.created_at AS \"last_at?\"\n           FROM channels ch\n           LEFT JOIN LATERAL (\n               SELECT status, created_at FROM notifications n\n               WHERE n.channel_id = ch.id\n               ORDER BY created_at DESC LIMIT 1\n           ) last ON true\n           WHERE ch.org_id = $1 AND ch.id = $2",
+  "query": "SELECT ch.id, ch.kind, ch.name, ch.config_enc, ch.verified_at, ch.created_at,\n                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id)\n                  + (SELECT count(*) FROM monitor_channels mc WHERE mc.channel_id = ch.id) AS \"check_count!\",\n                  last.status AS \"last_status?\", last.created_at AS \"last_at?\"\n           FROM channels ch\n           LEFT JOIN LATERAL (\n               SELECT status, created_at FROM notifications n\n               WHERE n.channel_id = ch.id\n               ORDER BY created_at DESC LIMIT 1\n           ) last ON true\n           WHERE ch.org_id = $1 AND ch.id = $2",
   "describe": {
     "columns": [
       {
@@ -116,5 +116,5 @@
       true
     ]
   },
-  "hash": "4b8a6d29ab1f4bf8ee388d986b491fb353aa4ae538a5ba10ec0676e0f2c14c53"
+  "hash": "f04f95dcc4d15ff5e904a8b7ab7b7b0501575db8112cc6e86e27ebec350d8107"
 }

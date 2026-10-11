@@ -1,0 +1,19 @@
+{% for row in rows %}
+<tr>
+  <td><span class="pill {{ row.status.css() }}">{{ row.status.label() }}</span></td>
+  <td><a href="/monitors/{{ row.id }}">{{ row.name }}</a><div class="muted small-text">{{ row.host }}</div></td>
+  <td class="num">{{ row.uptime }}</td>
+  <td class="num">{{ row.latency }}</td>
+  <td>
+    {% if let Some(s) = row.sparkline %}
+    <svg class="viz spark" viewBox="0 0 {{ s.width }} {{ s.height }}" width="{{ s.width }}" height="{{ s.height }}" role="img" aria-label="{{ s.summary }}">
+      <title>{{ s.summary }}</title>
+      <path d="{{ s.path }}" class="spark-line"/>
+      {% for (x, y) in s.dots %}<circle cx="{{ x }}" cy="{{ y }}" r="1.5" class="spark-dot"/>{% endfor %}
+      {% if let Some((x, y)) = s.end %}<circle cx="{{ x }}" cy="{{ y }}" r="3" class="spark-end"/>{% endif %}
+    </svg>
+    {% else %}<span class="muted">—</span>{% endif %}
+  </td>
+  <td class="muted">{{ row.last_checked }}</td>
+</tr>
+{% endfor %}

@@ -232,3 +232,68 @@ details summary { cursor: pointer; color: var(--accent); }
 .banner button.link { color: inherit; font-weight: 600; }
 .label-row { display: flex; justify-content: space-between; align-items: baseline; }
 a.small { font-size: 0.85rem; font-weight: 400; }
+
+/* ───────── uptime & charts ───────── */
+
+/* Chart palette: categorical slots 1–2 and status-critical from the validated
+   reference palette (light/dark steps chosen per surface). Text never uses them. */
+.viz {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --critical: #d03b3b;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --axis-ink: #898781;
+  --spark-ink: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  .viz {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+  }
+}
+
+.num { font-variant-numeric: tabular-nums; }
+.table th.num, .table td.num { text-align: right; }
+.small-text { font-size: 0.8rem; }
+.row-fail td { background: color-mix(in srgb, var(--down-bg) 45%, transparent); }
+
+.spark { display: block; overflow: visible; }
+.spark-line { fill: none; stroke: var(--spark-ink); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.spark-dot { fill: var(--spark-ink); }
+.spark-end { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.tile { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0; }
+.tile-label { color: var(--muted); font-size: 0.85rem; }
+.tile-value { font-size: 1.6rem; font-weight: 600; line-height: 1.2; }
+
+.chart { margin: 0; }
+.chart figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1.5rem; margin-bottom: 0.5rem; }
+.chart figcaption h2 { margin: 0; }
+.legend { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.chart > svg { display: block; overflow: visible; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .baseline { stroke: var(--baseline); stroke-width: 1; }
+.chart .axis { fill: var(--axis-ink); font-size: 11px; font-variant-numeric: tabular-nums; }
+.viz .line-avg, .viz .line-p95 { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.viz .line-avg { stroke: var(--series-1); }
+.viz .line-p95 { stroke: var(--series-2); }
+.chart .dot-avg { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+.chart .dot-p95 { fill: var(--series-2); stroke: var(--surface); stroke-width: 2; }
+.chart .end-label { fill: var(--muted); font-size: 11px; }
+.viz .fail-mark { stroke: var(--critical); stroke-width: 2; stroke-linecap: round; fill: none; }
+.chart .hit { fill: transparent; }
+.chart .crosshair { stroke: var(--muted); stroke-width: 1; opacity: 0; pointer-events: none; }
+.chart .col:hover .crosshair, .chart .col:focus .crosshair { opacity: 1; }
+.chart .col:focus { outline: none; }
+.chart .col:focus .hit { fill: color-mix(in srgb, var(--accent) 6%, transparent); }
+.chart details { margin-top: 0.5rem; }
+.form textarea {
+  padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); color: var(--text); font: inherit; resize: vertical;
+}
+.form details label { margin-top: 0.6rem; }

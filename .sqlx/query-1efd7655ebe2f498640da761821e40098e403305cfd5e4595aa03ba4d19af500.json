@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.bucket_hour, r.avg_ms, r.p95_ms, r.count, r.fail_count\n         FROM http_rollups r JOIN http_monitors m ON m.id = r.monitor_id\n         WHERE r.monitor_id = $1 AND m.org_id = $2\n           AND r.bucket_hour >= date_trunc('hour', now()) - interval '23 hours'\n         ORDER BY r.bucket_hour",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket_hour",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "http_rollups",
+            "name": "bucket_hour"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "avg_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_rollups",
+            "name": "avg_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "p95_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_rollups",
+            "name": "p95_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_rollups",
+            "name": "count"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "fail_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "http_rollups",
+            "name": "fail_count"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "1efd7655ebe2f498640da761821e40098e403305cfd5e4595aa03ba4d19af500"
+}

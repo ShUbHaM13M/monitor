@@ -148,7 +148,7 @@ async fn webhook_gets_down_recovery_and_failure_alerts(db: PgPool) {
     let body = verified_json(&requests[0]);
     assert_eq!(body["event"], "down");
     assert_eq!(body["title"], "🚨 Nightly backup is down");
-    assert_eq!(body["check"]["url"], format!("{ORIGIN}/checks/{check}"));
+    assert_eq!(body["source"]["url"], format!("{ORIGIN}/checks/{check}"));
     assert_eq!(body["reason"], "Missed ping");
     let (event, status, attempts, error, sent) = notification_row(&ctx.db).await;
     assert_eq!(
@@ -271,7 +271,7 @@ async fn test_button_sends_a_sample_alert(db: PgPool) {
     let res = send(&ctx.app, req).await;
     assert!(res.body.contains("Test alert sent."), "{}", res.body);
     let body = verified_json(&server.received_requests().await.unwrap()[0]);
-    assert_eq!(body["check"]["name"], "Test alert");
+    assert_eq!(body["source"]["name"], "Test alert");
 }
 
 #[sqlx::test]

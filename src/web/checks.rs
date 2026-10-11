@@ -122,17 +122,17 @@ struct FormView {
     error: Option<String>,
 }
 
-struct ChannelChoice {
-    id: Uuid,
-    name: String,
-    kind: String,
-    verified: bool,
-    checked: bool,
+pub(super) struct ChannelChoice {
+    pub(super) id: Uuid,
+    pub(super) name: String,
+    pub(super) kind: String,
+    pub(super) verified: bool,
+    pub(super) checked: bool,
 }
 
 /// The org's channels as checkboxes. `selected: None` ticks them all (new checks
-/// alert everywhere by default).
-async fn channel_choices(
+/// and monitors alert everywhere by default).
+pub(super) async fn channel_choices(
     state: &AppState,
     user: &CurrentUser,
     selected: Option<&[Uuid]>,
@@ -486,20 +486,22 @@ impl PingRow {
     }
 }
 
-struct IncidentRow {
-    reason: &'static str,
-    detail: String,
-    started: String,
-    resolution: String,
-    open: bool,
+pub(super) struct IncidentRow {
+    pub(super) reason: &'static str,
+    pub(super) detail: String,
+    pub(super) started: String,
+    pub(super) resolution: String,
+    pub(super) open: bool,
 }
 
 impl IncidentRow {
-    fn new(incident: Incident) -> Self {
+    pub(super) fn new(incident: Incident) -> Self {
         let reason = match incident.reason.as_str() {
             "missed" => "Missed ping",
             "failed" => "Job failed",
             "hung" => "Run never finished",
+            "http_down" => "Not responding as expected",
+            "http_slow" => "Responding too slowly",
             _ => "Down",
         };
         let resolution = match incident.resolved_at {
@@ -691,7 +693,7 @@ fn next_due(check: &Check, now: DateTime<Utc>) -> String {
     }
 }
 
-fn absolute(t: DateTime<Utc>) -> String {
+pub(super) fn absolute(t: DateTime<Utc>) -> String {
     t.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 

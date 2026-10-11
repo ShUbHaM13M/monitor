@@ -37,6 +37,31 @@ pub async fn enqueue_for_check(
     Ok(res.rows_affected())
 }
 
+/// Queues `alert` for every verified channel attached to the HTTP monitor.
+pub async fn enqueue_for_monitor(
+    conn: &mut PgConnection,
+    incident_id: Uuid,
+    monitor_id: Uuid,
+    alert: &Alert,
+) -> sqlx::Result<u64> {
+    let payload = serde_json::to_value(alert).expect("Alert serialises");
+    let res = sqlx::query!(
+        "INSERT INTO notifications (incident_id, channel_id, event, payload)
+         SELECT $1, mc.channel_id, $3, $4
+         FROM monitor_channels mc
+         JOIN channels ch ON ch.id = mc.channel_id
+         WHERE mc.monitor_id = $2 AND ch.verified_at IS NOT NULL
+         ON CONFLICT (incident_id, channel_id, event) DO NOTHING",
+        incident_id,
+        monitor_id,
+        alert.event.as_str(),
+        payload,
+    )
+    .execute(conn)
+    .await?;
+    Ok(res.rows_affected())
+}
+
 /// Queues a recovery for the channels that were told about this incident, and only
 /// those: a channel attached or confirmed mid-incident shouldn't hear "back up" for an
 /// outage it never heard about, and one detached mid-incident still hears it's over.
@@ -131,7 +156,8 @@ pub async fn mark_dead(db: &PgPool, id: i64, error: &str) -> sqlx::Result<()> {
 
 pub struct Delivery {
     pub event: String,
-    pub check_name: Option<String>,
+    /// Name of the check or monitor the alert was about.
+    pub source_name: Option<String>,
     pub status: String,
     pub attempts: i32,
     pub last_error: Option<String>,
@@ -148,7 +174,7 @@ pub async fn recent_for_channel(
 ) -> sqlx::Result<Vec<Delivery>> {
     sqlx::query_as!(
         Delivery,
-        r#"SELECT n.event, n.payload->>'check_name' AS check_name, n.status, n.attempts,
+        r#"SELECT n.event, COALESCE(n.payload->'source'->>'name', n.payload->>'check_name') AS source_name, n.status, n.attempts,
                   n.last_error, n.created_at, n.sent_at
            FROM notifications n
            JOIN channels ch ON ch.id = n.channel_id

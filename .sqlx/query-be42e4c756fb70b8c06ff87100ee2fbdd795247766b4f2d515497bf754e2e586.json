@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notifications (incident_id, channel_id, event, payload)\n         SELECT $1, mc.channel_id, $3, $4\n         FROM monitor_channels mc\n         JOIN channels ch ON ch.id = mc.channel_id\n         WHERE mc.monitor_id = $2 AND ch.verified_at IS NOT NULL\n         ON CONFLICT (incident_id, channel_id, event) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be42e4c756fb70b8c06ff87100ee2fbdd795247766b4f2d515497bf754e2e586"
+}

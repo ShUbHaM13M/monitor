@@ -66,7 +66,7 @@ pub async fn tick(db: &PgPool, base_url: &str) -> anyhow::Result<u64> {
                 incidents::open_for_check(&mut tx, check.org_id, check.id, reason, &detail, None)
                     .await?;
             if let Some(incident_id) = opened {
-                let mut alert = Alert::new(AlertEvent::Down, check.id, &check.name, base_url);
+                let mut alert = Alert::for_check(AlertEvent::Down, check.id, &check.name, base_url);
                 alert.reason = Some(label.into());
                 alert.detail = Some(detail);
                 notifications::enqueue_for_check(&mut tx, incident_id, check.id, &alert).await?;

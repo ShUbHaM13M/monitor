@@ -1,0 +1,116 @@
+{# Refreshes every 30s and right after "Check now"; skipped while a table is expanded. #}
+<div id="activity" hx-get="/monitors/{{ activity.id }}/activity"
+     hx-trigger="every 30s [!this.querySelector('details[open]')], monitor-checked from:body"
+     hx-swap="outerHTML">
+  <section class="tiles">
+    <div class="card tile">
+      <span class="tile-label">Status</span>
+      <span class="tile-value"><span class="pill {{ activity.status.css() }}">{{ activity.status.label() }}</span></span>
+      <span class="muted small-text">checked {{ activity.last_checked }}</span>
+    </div>
+    {% for tile in activity.tiles %}
+    <div class="card tile">
+      <span class="tile-label">{{ tile.label }}</span>
+      <span class="tile-value">{{ tile.value }}</span>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if let Some(error) = activity.last_error %}
+  <p class="form-error">Last check failed: {{ error }}</p>
+  {% endif %}
+
+  <section class="card">
+    {% if let Some(c) = activity.chart %}
+    <figure class="viz chart">
+      <figcaption>
+        <h2>Response time, last 24 hours <span class="muted">(UTC)</span></h2>
+        <span class="legend">
+          <span><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" class="line-avg"/></svg>Average</span>
+          <span><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" class="line-p95"/></svg>95th percentile</span>
+          {% if !c.failures.is_empty() %}
+          <span><svg width="10" height="10" aria-hidden="true"><path d="M1,1 L9,9 M9,1 L1,9" class="fail-mark"/></svg>Hour with failed checks</span>
+          {% endif %}
+        </span>
+      </figcaption>
+      <svg viewBox="0 0 {{ c.width }} {{ c.height }}" width="100%" role="img"
+           aria-label="Response time per hour over the last 24 hours, average and 95th percentile. A table follows.">
+        {% for t in c.y_ticks %}
+        <line x1="{{ c.plot_left }}" x2="{{ c.plot_right }}" y1="{{ t.pos }}" y2="{{ t.pos }}" class="{% if loop.first %}baseline{% else %}grid{% endif %}"/>
+        <text x="{{ c.plot_left - 8.0 }}" y="{{ t.pos + 4.0 }}" text-anchor="end" class="axis">{{ t.label }}</text>
+        {% endfor %}
+        {% for t in c.x_ticks %}
+        <text x="{{ t.pos }}" y="{{ c.plot_bottom + 18.0 }}" text-anchor="middle" class="axis">{{ t.label }}</text>
+        {% endfor %}
+        <path d="{{ c.p95_path }}" class="line-p95"/>
+        <path d="{{ c.avg_path }}" class="line-avg"/>
+        {% for (x, y) in c.p95_dots %}<circle cx="{{ x }}" cy="{{ y }}" r="4" class="dot-p95"/>{% endfor %}
+        {% for (x, y) in c.avg_dots %}<circle cx="{{ x }}" cy="{{ y }}" r="4" class="dot-avg"/>{% endfor %}
+        {% if let Some(l) = c.p95_end %}<text x="{{ l.x }}" y="{{ l.y }}" class="end-label">{{ l.text }}</text>{% endif %}
+        {% if let Some(l) = c.avg_end %}<text x="{{ l.x }}" y="{{ l.y }}" class="end-label">{{ l.text }}</text>{% endif %}
+        {% for (x, n) in c.failures %}
+        <path d="M{{ x - 4.0 }},{{ c.plot_bottom + 26.0 }} L{{ x + 4.0 }},{{ c.plot_bottom + 34.0 }} M{{ x + 4.0 }},{{ c.plot_bottom + 26.0 }} L{{ x - 4.0 }},{{ c.plot_bottom + 34.0 }}" class="fail-mark"><title>{{ n }} failed</title></path>
+        {% endfor %}
+        {% for col in c.columns %}
+        <g class="col" tabindex="0" aria-label="{{ col.hour }}: average {{ col.avg }}, 95th percentile {{ col.p95 }}, {{ col.failed }} of {{ col.checks }} checks failed">
+          <title>{{ col.hour }} · avg {{ col.avg }} · p95 {{ col.p95 }} · {{ col.failed }} of {{ col.checks }} checks failed</title>
+          <rect x="{{ col.x }}" y="{{ c.plot_top }}" width="{{ col.width }}" height="{{ c.plot_bottom - c.plot_top + 40.0 }}" class="hit"/>
+          <line x1="{{ col.center }}" x2="{{ col.center }}" y1="{{ c.plot_top }}" y2="{{ c.plot_bottom }}" class="crosshair"/>
+        </g>
+        {% endfor %}
+      </svg>
+      <details>
+        <summary>Show as table</summary>
+        <table class="table">
+          <thead><tr><th>Hour</th><th class="num">Average</th><th class="num">p95</th><th class="num">Checks</th><th class="num">Failed</th></tr></thead>
+          <tbody>
+            {% for col in c.columns %}{% if col.checks > 0 %}
+            <tr><td>{{ col.hour }}</td><td class="num">{{ col.avg }}</td><td class="num">{{ col.p95 }}</td><td class="num">{{ col.checks }}</td><td class="num">{{ col.failed }}</td></tr>
+            {% endif %}{% endfor %}
+          </tbody>
+        </table>
+      </details>
+    </figure>
+    {% else %}
+    <h2>Response time</h2>
+    <p class="muted">No data yet. The chart fills in as checks run (hourly figures update every minute).</p>
+    {% endif %}
+  </section>
+
+  {% if !activity.incidents.is_empty() %}
+  <section class="card">
+    <h2>Incidents</h2>
+    <ul class="incidents">
+      {% for incident in activity.incidents %}
+      <li class="{% if incident.open %}open{% endif %}">
+        <strong>{{ incident.reason }}</strong>
+        <span class="muted">{{ incident.started }} · {{ incident.resolution }}</span>
+        {% if !incident.detail.is_empty() %}<div>{{ incident.detail }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Recent checks</h2>
+    {% if activity.results.is_empty() %}
+    <p class="muted">No checks yet. The first one runs within one interval, or use “Check now”.</p>
+    {% else %}
+    <table class="table">
+      <thead><tr><th>Result</th><th>When</th><th class="num">Status</th><th class="num">Response time</th><th>Error</th></tr></thead>
+      <tbody>
+        {% for r in activity.results %}
+        <tr class="{% if !r.ok %}row-fail{% endif %}">
+          <td>{% if r.ok %}<span class="pill pill-up">✓ ok</span>{% else %}<span class="pill pill-down">✕ failed</span>{% endif %}</td>
+          <td title="{{ r.at }}">{{ r.when }}</td>
+          <td class="num">{{ r.status }}</td>
+          <td class="num">{{ r.latency }}</td>
+          <td class="muted">{{ r.error }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+</div>

@@ -65,7 +65,7 @@ src/
   web/        router, handlers, ping ingest (/p/{token}), error type, static assets
   notify/     alert channels: the ChannelKind trait, registry, built-in kinds, SSRF-safe HTTP
   crypto.rs   encryption at rest for channel configs
-  worker/     background loops: deadline scheduler, alert notifier, session cleanup
+  worker/     background loops: deadline scheduler, HTTP prober, rollups, alert notifier, cleanup
               (work is claimed with FOR UPDATE SKIP LOCKED, so workers can scale out)
 ```
 
@@ -77,6 +77,26 @@ for 1 hour, works once, and logs the user out everywhere. Both kinds of link ope
 with a button rather than acting on the GET, because mail scanners prefetch links. Tokens
 are stored hashed, and each kind can be sent at most once a minute per account. Without
 `SMTP_URL` there is no banner and no reset.
+
+## Uptime monitors
+
+An HTTP monitor requests a URL every 30s to 1h. A check passes when:
+- the status matches (any 2xx/3xx by default, or an exact code),
+- the response contains a given text (optional),
+- and it answers within a time limit (optional; slower counts as a failure).
+
+After N failed checks in a row (default 2) the monitor goes down, opens an incident and
+alerts. The first passing check after that resolves the incident and sends a recovery.
+
+How it works:
+- **Prober:** the worker claims due monitors with `FOR UPDATE SKIP LOCKED`, by moving
+  `next_run_at` one interval ahead, and probes up to 50 at once. New monitors start at a
+  random point in their first interval, so they don't all fire together.
+- **Requests:** made with the same SSRF-guarded client as webhooks (no private
+  addresses, no redirects). Request headers are encrypted at rest.
+- **Latency:** time to response headers. Hourly rollups (count, failures, avg, p50,
+  p95) are refreshed every minute and drive the uptime % and charts.
+- **Retention:** raw results are kept for 7 days, hourly rollups for 90.
 
 ## Alerts
 

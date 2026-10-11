@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE http_monitors m\n         SET status = CASE WHEN EXISTS (\n                 SELECT 1 FROM incidents i WHERE i.monitor_id = m.id AND i.resolved_at IS NULL\n             ) THEN 'down' ELSE 'new' END,\n             consecutive_failures = 0, next_run_at = now(), updated_at = now()\n         WHERE id = $1 AND org_id = $2 AND status = 'paused'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7be2f2ff5bce230019a955800fef2e00ce471de41e08bc1a79d93a6ab80c97f4"
+}

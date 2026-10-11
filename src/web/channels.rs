@@ -301,7 +301,7 @@ fn form_error(
 
 struct DeliveryRow {
     event: String,
-    check_name: String,
+    source_name: String,
     status: String,
     css: &'static str,
     attempts: i32,
@@ -336,7 +336,7 @@ pub async fn show(
                 _ => "pill-run",
             },
             event: d.event,
-            check_name: d.check_name.unwrap_or_default(),
+            source_name: d.source_name.unwrap_or_default(),
             status: d.status,
             attempts: d.attempts,
             error: d.last_error,

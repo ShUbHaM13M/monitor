@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO incidents (id, org_id, monitor_id, reason, detail)\n         VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (monitor_id) WHERE resolved_at IS NULL DO NOTHING\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0722156c136fe3041133dda0b6079bf8825b256dbc17ae007c5e492c11356aea"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE http_monitors\n         SET name = $3, url = $4, method = $5, headers_enc = $6, body = $7, interval_secs = $8::int,\n             timeout_ms = $9, expected_status = $10, body_contains = $11, max_latency_ms = $12,\n             fail_threshold = $13,\n             next_run_at = LEAST(next_run_at, now() + make_interval(secs => $8::int)),\n             updated_at = now()\n         WHERE id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bytea",
+        "Text",
+        "Int4",
+        "Int4",
+        "Int2",
+        "Text",
+        "Int4",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b7fa18f29f83d4855721c14cd56b9d9ad3b625c7809d23655637d4c44f3e77a2"
+}

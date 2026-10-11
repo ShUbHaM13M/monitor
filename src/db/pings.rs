@@ -153,7 +153,8 @@ pub async fn record(
 
             if outcome == Outcome::Succeeded {
                 if let Some(resolved) = incidents::resolve_for_check(&mut tx, check.id).await? {
-                    let mut alert = Alert::new(AlertEvent::Up, check.id, &check.name, base_url);
+                    let mut alert =
+                        Alert::for_check(AlertEvent::Up, check.id, &check.name, base_url);
                     alert.occurred_at = now;
                     alert.down_since = Some(resolved.started_at);
                     notifications::enqueue_recovery(&mut tx, resolved.id, &alert).await?;
@@ -173,7 +174,8 @@ pub async fn record(
                 )
                 .await?;
                 if let Some(incident_id) = opened {
-                    let mut alert = Alert::new(AlertEvent::Fail, check.id, &check.name, base_url);
+                    let mut alert =
+                        Alert::for_check(AlertEvent::Fail, check.id, &check.name, base_url);
                     alert.occurred_at = now;
                     alert.reason = Some("Job failed".into());
                     alert.detail = Some(detail);

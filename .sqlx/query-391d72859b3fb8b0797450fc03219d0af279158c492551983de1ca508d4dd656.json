@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.monitor_id, sum(r.count)::bigint AS total, sum(r.fail_count)::bigint AS failed\n           FROM http_rollups r JOIN http_monitors m ON m.id = r.monitor_id\n           WHERE m.org_id = $1 AND r.bucket_hour >= date_trunc('hour', now()) - interval '23 hours'\n           GROUP BY r.monitor_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "monitor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "http_rollups",
+            "name": "monitor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "total",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "failed",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "391d72859b3fb8b0797450fc03219d0af279158c492551983de1ca508d4dd656"
+}

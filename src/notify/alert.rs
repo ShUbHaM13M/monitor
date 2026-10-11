@@ -4,8 +4,9 @@ use uuid::Uuid;
 
 use crate::domain::time::duration;
 
-/// Bump when the shape changes; stored payloads keep their version.
-const VERSION: u8 = 1;
+/// Bump when the shape changes; stored payloads keep their version and must stay
+/// readable (see [`AlertWire`]).
+const VERSION: u8 = 2;
 const LOG_TAIL_LINES: usize = 30;
 const LOG_TAIL_BYTES: usize = 2000;
 
@@ -31,17 +32,35 @@ impl AlertEvent {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceKind {
+    /// A cron / heartbeat check.
+    Check,
+    /// An HTTP uptime monitor.
+    Monitor,
+}
+
+/// What the alert is about.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Source {
+    #[serde(rename = "type")]
+    pub kind: SourceKind,
+    pub id: Uuid,
+    pub name: String,
+    /// Link to it in the dashboard.
+    pub url: String,
+}
+
 /// What every channel delivers, whatever its format. Stored in
 /// `notifications.payload` as a snapshot, so later edits to the check don't change
 /// what an alert said.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(from = "AlertWire")]
 pub struct Alert {
     pub v: u8,
     pub event: AlertEvent,
-    pub check_id: Uuid,
-    pub check_name: String,
-    /// Link to the check in the dashboard.
-    pub check_url: String,
+    pub source: Source,
     /// Human-readable reason, e.g. "Missed ping".
     pub reason: Option<String>,
     pub detail: Option<String>,
@@ -52,14 +71,67 @@ pub struct Alert {
     pub down_since: Option<DateTime<Utc>>,
 }
 
+/// Accepts both the current shape and v1 payloads (flat `check_id`, `check_name`,
+/// `check_url`), which may still sit in the outbox awaiting a retry.
+#[derive(Deserialize)]
+struct AlertWire {
+    v: u8,
+    event: AlertEvent,
+    source: Option<Source>,
+    check_id: Option<Uuid>,
+    check_name: Option<String>,
+    check_url: Option<String>,
+    reason: Option<String>,
+    detail: Option<String>,
+    log_tail: Option<String>,
+    occurred_at: DateTime<Utc>,
+    down_since: Option<DateTime<Utc>>,
+}
+
+impl From<AlertWire> for Alert {
+    fn from(w: AlertWire) -> Self {
+        let source = w.source.unwrap_or_else(|| Source {
+            kind: SourceKind::Check,
+            id: w.check_id.unwrap_or_default(),
+            name: w.check_name.unwrap_or_default(),
+            url: w.check_url.unwrap_or_default(),
+        });
+        Self {
+            v: w.v,
+            event: w.event,
+            source,
+            reason: w.reason,
+            detail: w.detail,
+            log_tail: w.log_tail,
+            occurred_at: w.occurred_at,
+            down_since: w.down_since,
+        }
+    }
+}
+
 impl Alert {
-    pub fn new(event: AlertEvent, check_id: Uuid, check_name: &str, base_url: &str) -> Self {
+    pub fn for_check(event: AlertEvent, id: Uuid, name: &str, base_url: &str) -> Self {
+        Self::new(event, SourceKind::Check, id, name, base_url)
+    }
+
+    pub fn for_monitor(event: AlertEvent, id: Uuid, name: &str, base_url: &str) -> Self {
+        Self::new(event, SourceKind::Monitor, id, name, base_url)
+    }
+
+    fn new(event: AlertEvent, kind: SourceKind, id: Uuid, name: &str, base_url: &str) -> Self {
+        let section = match kind {
+            SourceKind::Check => "checks",
+            SourceKind::Monitor => "monitors",
+        };
         Self {
             v: VERSION,
             event,
-            check_id,
-            check_name: check_name.to_owned(),
-            check_url: format!("{}/checks/{check_id}", base_url.trim_end_matches('/')),
+            source: Source {
+                kind,
+                id,
+                name: name.to_owned(),
+                url: format!("{}/{section}/{id}", base_url.trim_end_matches('/')),
+            },
             reason: None,
             detail: None,
             log_tail: None,
@@ -70,7 +142,7 @@ impl Alert {
 
     /// What "Send test" delivers.
     pub fn sample(base_url: &str) -> Self {
-        let mut alert = Self::new(AlertEvent::Down, Uuid::nil(), "Test alert", base_url);
+        let mut alert = Self::for_check(AlertEvent::Down, Uuid::nil(), "Test alert", base_url);
         alert.reason = Some("Test".into());
         alert.detail = Some("This is a test alert from Monitor. Your channel works.".into());
         alert
@@ -78,9 +150,9 @@ impl Alert {
 
     pub fn title(&self) -> String {
         match self.event {
-            AlertEvent::Down => format!("🚨 {} is down", self.check_name),
-            AlertEvent::Fail => format!("❌ {} failed", self.check_name),
-            AlertEvent::Up => format!("✅ {} is back up", self.check_name),
+            AlertEvent::Down => format!("🚨 {} is down", self.source.name),
+            AlertEvent::Fail => format!("❌ {} failed", self.source.name),
+            AlertEvent::Up => format!("✅ {} is back up", self.source.name),
         }
     }
 
@@ -111,7 +183,7 @@ impl Alert {
             out.push_str(log);
         }
         out.push_str("\n\n");
-        out.push_str(&self.check_url);
+        out.push_str(&self.source.url);
         out
     }
 }
@@ -137,7 +209,7 @@ mod tests {
     use super::*;
 
     fn alert(event: AlertEvent) -> Alert {
-        Alert::new(
+        Alert::for_check(
             event,
             Uuid::nil(),
             "Daily Database Backup",
@@ -160,7 +232,7 @@ mod tests {
             "✅ Daily Database Backup is back up"
         );
         assert_eq!(
-            alert(AlertEvent::Up).check_url,
+            alert(AlertEvent::Up).source.url,
             "https://mon.example/checks/00000000-0000-0000-0000-000000000000"
         );
     }
@@ -178,7 +250,7 @@ mod tests {
             )
         );
         assert!(text.contains("Last output:\npg_dump: connection refused"));
-        assert!(text.ends_with(&a.check_url));
+        assert!(text.ends_with(&a.source.url));
     }
 
     #[test]
@@ -186,6 +258,30 @@ mod tests {
         let mut a = alert(AlertEvent::Up);
         a.down_since = Some(a.occurred_at - TimeDelta::minutes(12));
         assert_eq!(a.summary().unwrap(), "It was down for 12m 00s.");
+    }
+
+    #[test]
+    fn monitors_link_to_the_uptime_pages() {
+        let a = Alert::for_monitor(AlertEvent::Down, Uuid::nil(), "API", "https://mon.example");
+        assert_eq!(a.source.kind, SourceKind::Monitor);
+        assert!(a.source.url.starts_with("https://mon.example/monitors/"));
+        assert_eq!(a.title(), "🚨 API is down");
+    }
+
+    #[test]
+    fn reads_v1_payloads_still_in_the_outbox() {
+        let v1 = serde_json::json!({
+            "v": 1, "event": "down",
+            "check_id": "00000000-0000-0000-0000-000000000000",
+            "check_name": "Backup", "check_url": "https://m.example/checks/x",
+            "reason": "Missed ping", "detail": null, "log_tail": null,
+            "occurred_at": "2026-10-01T00:00:00Z", "down_since": null
+        });
+        let a: Alert = serde_json::from_value(v1).unwrap();
+        assert_eq!(a.source.kind, SourceKind::Check);
+        assert_eq!(a.source.name, "Backup");
+        assert_eq!(a.source.url, "https://m.example/checks/x");
+        assert_eq!(a.title(), "🚨 Backup is down");
     }
 
     #[test]

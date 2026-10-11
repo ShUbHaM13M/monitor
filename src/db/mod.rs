@@ -1,6 +1,7 @@
 pub mod channels;
 pub mod checks;
 pub mod incidents;
+pub mod monitors;
 pub mod notifications;
 pub mod pings;
 pub mod user_tokens;

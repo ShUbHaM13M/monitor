@@ -114,7 +114,7 @@ fn payload(alert: &Alert) -> Value {
         "event": alert.event,
         "title": alert.title(),
         "summary": alert.summary(),
-        "check": { "id": alert.check_id, "name": alert.check_name, "url": alert.check_url },
+        "source": alert.source,
         "reason": alert.reason,
         "detail": alert.detail,
         "log_tail": alert.log_tail,
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn payload_shape() {
-        let mut alert = Alert::new(
+        let mut alert = Alert::for_check(
             AlertEvent::Fail,
             uuid::Uuid::nil(),
             "Backup",
@@ -208,7 +208,8 @@ mod tests {
         alert.log_tail = Some("boom".into());
         let p = payload(&alert);
         assert_eq!(p["event"], "fail");
-        assert_eq!(p["check"]["name"], "Backup");
+        assert_eq!(p["source"]["type"], "check");
+        assert_eq!(p["source"]["name"], "Backup");
         assert_eq!(p["log_tail"], "boom");
         assert_eq!(p["title"], "❌ Backup failed");
     }

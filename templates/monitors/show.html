@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ name }} · Monitor{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="/monitors">← Uptime</a></p>
+<div class="page-head">
+  <h1>{{ name }}</h1>
+  <div class="actions">
+    <form hx-post="/monitors/{{ id }}/check" hx-target="#check-result" hx-swap="innerHTML" class="inline">
+      <button type="submit" class="button secondary">Check now</button>
+    </form>
+    <a href="/monitors/{{ id }}/edit" class="button secondary">Edit</a>
+    {% if paused %}
+    <form method="post" action="/monitors/{{ id }}/resume" class="inline">
+      <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+      <button type="submit" class="button secondary">Resume</button>
+    </form>
+    {% else %}
+    <form method="post" action="/monitors/{{ id }}/pause" class="inline">
+      <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+      <button type="submit" class="button secondary">Pause</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/monitors/{{ id }}/delete" class="inline"
+          hx-post="/monitors/{{ id }}/delete" hx-confirm="Delete this monitor and its history?">
+      <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+      <button type="submit" class="button danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<p class="muted"><span class="mono">{{ method }} {{ url }}</span> · every {{ interval }}</p>
+<p class="muted">Passes on {% for rule in rules %}{{ rule }}{% if !loop.last %} · {% endif %}{% endfor %}</p>
+<div id="check-result" aria-live="polite"></div>
+
+{% include "monitors/activity.html" %}
+{% endblock %}

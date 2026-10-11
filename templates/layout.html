@@ -15,6 +15,7 @@
     <nav>
       {% if let Some(user) = chrome.user %}
         <a href="/dashboard">Checks</a>
+        <a href="/monitors">Uptime</a>
         <a href="/channels">Channels</a>
         <span class="muted">{{ user.org_name }} · {{ user.email }}</span>
         <form method="post" action="/logout" class="inline">

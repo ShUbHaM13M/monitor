@@ -20,7 +20,7 @@
   </div>
 </div>
 
-<p class="muted">{{ channel.kind }} · <span class="mono">{{ channel.summary }}</span> · used by {{ channel.check_count }} check{% if channel.check_count != 1 %}s{% endif %}</p>
+<p class="muted">{{ channel.kind }} · <span class="mono">{{ channel.summary }}</span> · used by {{ channel.check_count }} {% if channel.check_count == 1 %}check or monitor{% else %}checks and monitors{% endif %}</p>
 <div id="test-result" aria-live="polite"></div>
 
 {% if !channel.verified %}
@@ -41,13 +41,13 @@
   <p class="muted">Nothing sent yet.</p>
   {% else %}
   <table class="table">
-    <thead><tr><th>Status</th><th>Event</th><th>Check</th><th>When</th><th>Attempts</th><th>Error</th></tr></thead>
+    <thead><tr><th>Status</th><th>Event</th><th>Source</th><th>When</th><th>Attempts</th><th>Error</th></tr></thead>
     <tbody>
       {% for d in deliveries %}
       <tr>
         <td><span class="pill {{ d.css }}">{{ d.status }}</span></td>
         <td>{{ d.event }}</td>
-        <td>{{ d.check_name }}</td>
+        <td>{{ d.source_name }}</td>
         <td>{{ d.when }}</td>
         <td>{{ d.attempts }}</td>
         <td class="muted">{% if let Some(e) = d.error %}{{ e }}{% endif %}</td>

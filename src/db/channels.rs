@@ -26,7 +26,8 @@ pub async fn list(db: &PgPool, org: OrgId) -> sqlx::Result<Vec<Channel>> {
     sqlx::query_as!(
         Channel,
         r#"SELECT ch.id, ch.kind, ch.name, ch.config_enc, ch.verified_at, ch.created_at,
-                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id) AS "check_count!",
+                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id)
+                  + (SELECT count(*) FROM monitor_channels mc WHERE mc.channel_id = ch.id) AS "check_count!",
                   last.status AS "last_status?", last.created_at AS "last_at?"
            FROM channels ch
            LEFT JOIN LATERAL (
@@ -46,7 +47,8 @@ pub async fn get(db: &PgPool, org: OrgId, id: Uuid) -> sqlx::Result<Option<Chann
     sqlx::query_as!(
         Channel,
         r#"SELECT ch.id, ch.kind, ch.name, ch.config_enc, ch.verified_at, ch.created_at,
-                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id) AS "check_count!",
+                  (SELECT count(*) FROM check_channels cc WHERE cc.channel_id = ch.id)
+                  + (SELECT count(*) FROM monitor_channels mc WHERE mc.channel_id = ch.id) AS "check_count!",
                   last.status AS "last_status?", last.created_at AS "last_at?"
            FROM channels ch
            LEFT JOIN LATERAL (
@@ -70,7 +72,7 @@ pub struct NewChannel<'a> {
     pub verified: bool,
     /// sha256 of the confirmation token, when one is sent.
     pub verify_token_hash: Option<Vec<u8>>,
-    /// Attach the new channel to every existing check in the org.
+    /// Attach the new channel to every existing check and monitor in the org.
     pub attach_to_all_checks: bool,
 }
 
@@ -97,6 +99,14 @@ pub async fn create(db: &PgPool, org: OrgId, new: NewChannel<'_>) -> sqlx::Resul
         sqlx::query!(
             "INSERT INTO check_channels (check_id, channel_id, org_id)
              SELECT c.id, $1, c.org_id FROM checks c WHERE c.org_id = $2",
+            id,
+            org.get(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            "INSERT INTO monitor_channels (monitor_id, channel_id, org_id)
+             SELECT m.id, $1, m.org_id FROM http_monitors m WHERE m.org_id = $2",
             id,
             org.get(),
         )
@@ -232,6 +242,46 @@ pub async fn set_for_check(
          WHERE ch.org_id = $2 AND ch.id = ANY($3)
          ON CONFLICT DO NOTHING",
         check_id,
+        org.get(),
+        ids,
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn ids_for_monitor(db: &PgPool, org: OrgId, monitor_id: Uuid) -> sqlx::Result<Vec<Uuid>> {
+    sqlx::query_scalar!(
+        "SELECT channel_id FROM monitor_channels WHERE monitor_id = $1 AND org_id = $2",
+        monitor_id,
+        org.get(),
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// Makes `ids` the monitor's channels, like [`set_for_check`].
+pub async fn set_for_monitor(
+    conn: &mut PgConnection,
+    org: OrgId,
+    monitor_id: Uuid,
+    ids: &[Uuid],
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "DELETE FROM monitor_channels
+         WHERE monitor_id = $1 AND org_id = $2 AND NOT (channel_id = ANY($3))",
+        monitor_id,
+        org.get(),
+        ids,
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO monitor_channels (monitor_id, channel_id, org_id)
+         SELECT $1, ch.id, ch.org_id FROM channels ch
+         WHERE ch.org_id = $2 AND ch.id = ANY($3)
+         ON CONFLICT DO NOTHING",
+        monitor_id,
         org.get(),
         ids,
     )

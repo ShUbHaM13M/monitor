@@ -1,4 +1,5 @@
 pub mod notifier;
+pub mod prober;
 pub mod scheduler;
 
 use std::future::Future;
@@ -8,7 +9,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::auth::session;
-use crate::db::user_tokens;
+use crate::db::{monitors, user_tokens};
 use crate::web::AppState;
 
 /// Runs all background loops until `shutdown` is cancelled.
@@ -44,6 +45,28 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
         },
     ));
 
+    let st = state.clone();
+    tasks.spawn(periodic(
+        "prober",
+        Duration::from_secs(1),
+        shutdown.clone(),
+        move || {
+            let st = st.clone();
+            async move { prober::tick(&st).await.map(drop) }
+        },
+    ));
+
+    let db = state.db.clone();
+    tasks.spawn(periodic(
+        "rollups",
+        Duration::from_secs(60),
+        shutdown.clone(),
+        move || {
+            let db = db.clone();
+            async move { monitors::rollup(&db).await.map(drop).map_err(Into::into) }
+        },
+    ));
+
     let db = state.db.clone();
     tasks.spawn(periodic(
         "cleanup",
@@ -59,6 +82,10 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
                 let deleted = user_tokens::delete_expired(&db).await?;
                 if deleted > 0 {
                     tracing::info!(deleted, "removed expired account tokens");
+                }
+                let deleted = monitors::purge(&db).await?;
+                if deleted > 0 {
+                    tracing::info!(deleted, "removed old uptime results");
                 }
                 Ok(())
             }

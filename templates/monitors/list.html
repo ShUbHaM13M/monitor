@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+
+{% block title %}Uptime · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Uptime</h1>
+  <a href="/monitors/new" class="button">New monitor</a>
+</div>
+
+{% if rows.is_empty() %}
+<section class="card empty">
+  <h2>No monitors yet</h2>
+  <p class="muted">
+    A monitor requests a URL every minute (or however often you choose) and alerts you when it
+    stops responding, returns an error, or gets too slow.
+  </p>
+  <a href="/monitors/new" class="button">Monitor your first URL</a>
+</section>
+{% else %}
+<table class="table">
+  <thead>
+    <tr><th>Status</th><th>Name</th><th class="num">Uptime, 24h</th><th class="num">Latency</th><th>Last 24h</th><th>Checked</th></tr>
+  </thead>
+  <tbody hx-get="/monitors/table" hx-trigger="every 10s" hx-swap="innerHTML">
+    {% include "monitors/rows.html" %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}
