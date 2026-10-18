@@ -22,7 +22,7 @@
   <div class="row">
     <label class="grow">Check every
       <select name="interval_secs">
-        {% for (secs, label) in intervals %}<option value="{{ secs }}" {% if form.input.interval_secs == secs.to_string() %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        {% for (secs, label) in intervals %}<option value="{{ secs }}" {% if form.input.interval_secs == secs.to_string() %}selected{% endif %}{% if *secs < min_interval %} disabled{% endif %}>{{ label }}{% if *secs < min_interval %} (not on your plan){% endif %}</option>{% endfor %}
       </select>
     </label>
     <label class="grow">Timeout <span class="muted">(seconds)</span>

@@ -6,8 +6,9 @@
   <title>{% block title %}Monitor{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  {# Swap 422 responses so validation errors render in place; htmx skips 4xx by default. #}
-  <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
+  {# Swap 422/429 responses so errors render in place (htmx skips 4xx by default). No eval,
+     inline scripts or injected styles: the Content-Security-Policy forbids them. #}
+  <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"429","swap":true},{"code":"[45]..","swap":false,"error":true}],"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
@@ -45,6 +46,8 @@
   {% endif %}
   {% endif %}
   <main class="container">
+    {# Messages for htmx requests that can't update their own target (e.g. 429). #}
+    <div id="flash" role="alert"></div>
     {% block content %}{% endblock %}
   </main>
 </body>

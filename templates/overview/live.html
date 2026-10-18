@@ -39,7 +39,7 @@
   <section class="card group">
     <div class="group-head">
       <h2><a href="{{ g.href }}">{{ g.title }}</a></h2>
-      <span class="muted">{{ g.total }} total</span>
+      <span class="muted">{{ g.total }} of {{ g.limit }} on your plan</span>
     </div>
     {% if g.total == 0 %}
     <p class="muted">None yet. <a href="{{ g.new_href }}">Create a {{ g.noun }}</a>.</p>

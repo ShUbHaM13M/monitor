@@ -1,0 +1,90 @@
+# Production stack: Postgres, a one-shot migration, the app, and Caddy for TLS.
+#
+#   cd deploy
+#   cp .env.example .env    # fill in DOMAIN, SECRET_KEY, POSTGRES_PASSWORD, SMTP_URL
+#   docker compose up -d --build
+#
+# Only Caddy publishes ports. Postgres and the app's metrics port (9090) are
+# reachable only from containers on the `backend` network, e.g. a Prometheus
+# you add here.
+
+name: monitor
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: monitor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: monitor
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U monitor -d monitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  # Applies pending migrations, then exits; the app waits for it.
+  migrate:
+    build: ..
+    image: monitor:latest
+    command: ["migrate"]
+    env_file: .env
+    environment: &app-env
+      DATABASE_URL: postgres://monitor:${POSTGRES_PASSWORD}@postgres:5432/monitor
+      BASE_URL: https://${DOMAIN:?set DOMAIN in .env}
+      # Caddy's fixed address: only its X-Forwarded-For is believed.
+      TRUSTED_PROXIES: 172.30.0.10
+      METRICS_ADDR: 0.0.0.0:9090
+      AUTO_MIGRATE: "false"
+      ALLOW_PRIVATE_TARGETS: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  app:
+    image: monitor:latest
+    command: ["all"]
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # SIGTERM lets in-flight requests and worker ticks finish.
+    stop_grace_period: 20s
+    networks: [backend]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    networks:
+      backend:
+        ipv4_address: 172.30.0.10
+
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

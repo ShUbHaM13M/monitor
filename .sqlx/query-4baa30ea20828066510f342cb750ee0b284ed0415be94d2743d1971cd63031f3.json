@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"queued!\",\n                  count(*) FILTER (WHERE next_attempt_at < now() - interval '1 minute') AS \"overdue!\"\n           FROM notifications WHERE status IN ('pending', 'sending')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "overdue!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "4baa30ea20828066510f342cb750ee0b284ed0415be94d2743d1971cd63031f3"
+}

@@ -24,7 +24,7 @@
       hx-trigger="change, input changed delay:250ms from:#monitor-q, submit">
   <input type="search" id="monitor-q" name="q" value="{{ query.q }}" placeholder="Search by name or URL" aria-label="Search monitors" autocomplete="off">
   <div id="monitor-list" hx-get="/monitors/table" hx-include="#monitor-filters"
-       hx-trigger="every 10s [!document.hidden], visibilitychange[!document.hidden] from:document">
+       hx-trigger="every 10s, visibilitychange from:document" data-poll>
     {% include "monitors/list_body.html" %}
   </div>
 </form>

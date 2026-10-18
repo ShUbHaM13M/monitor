@@ -26,7 +26,7 @@
       hx-trigger="change, input changed delay:250ms from:#check-q, submit">
   <input type="search" id="check-q" name="q" value="{{ query.q }}" placeholder="Search by name" aria-label="Search checks" autocomplete="off">
   <div id="check-list" hx-get="/checks/table" hx-include="#check-filters"
-       hx-trigger="every 10s [!document.hidden], visibilitychange[!document.hidden] from:document">
+       hx-trigger="every 10s, visibilitychange from:document" data-poll>
     {% include "checks/list_body.html" %}
   </div>
 </form>

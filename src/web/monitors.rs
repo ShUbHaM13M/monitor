@@ -11,11 +11,12 @@ use super::charts::{self, HourInput, LatencyChart, Sparkline};
 use super::checks::{ChannelChoice, IncidentRow, channel_choices};
 use super::filter::{self, Chip, ListQuery};
 use super::stamp::Stamp;
-use super::{AppError, AppState, Chrome, is_htmx, redirect};
+use super::{AppError, AppState, Chrome, created, is_htmx, redirect};
 use crate::auth::CurrentUser;
-use crate::db::channels;
 use crate::db::incidents;
 use crate::db::monitors::{self, Monitor, MonitorSpec, MonitorState, ProbeTarget};
+use crate::db::{channels, orgs};
+use crate::domain::time::span;
 use crate::domain::uptime::{
     INTERVALS, MAX_THRESHOLD, MAX_TIMEOUT_SECS, METHODS, format_headers, parse_headers,
 };
@@ -242,6 +243,8 @@ struct FormPage {
     form: FormView,
     intervals: &'static [(i32, &'static str)],
     methods: &'static [&'static str],
+    /// Shorter intervals are shown but disabled.
+    min_interval: i32,
 }
 
 #[derive(Template)]
@@ -250,6 +253,8 @@ struct FormPartial {
     form: FormView,
     intervals: &'static [(i32, &'static str)],
     methods: &'static [&'static str],
+    /// Shorter intervals are shown but disabled.
+    min_interval: i32,
 }
 
 fn selected_ids(input: &MonitorInput) -> Vec<Uuid> {
@@ -264,12 +269,18 @@ pub async fn new_page(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Html<String>, AppError> {
+    let limits = orgs::limits(&state.db, user.org, &state.config.plan).await?;
+    let mut form = FormView::blank(channel_choices(&state, &user, None).await?);
+    if form.input.interval_secs.parse().unwrap_or(0) < limits.min_interval_secs {
+        form.input.interval_secs = limits.min_interval_secs.to_string();
+    }
     let page = FormPage {
         chrome: Chrome::signed_in(&user),
         title: "New monitor",
-        form: FormView::blank(channel_choices(&state, &user, None).await?),
+        form,
         intervals: &INTERVALS,
         methods: &METHODS,
+        min_interval: limits.min_interval_secs,
     };
     Ok(Html(page.render()?))
 }
@@ -280,17 +291,28 @@ pub async fn create(
     headers: HeaderMap,
     Form(input): Form<MonitorInput>,
 ) -> Result<Response, AppError> {
-    match parse_spec(&state, &input) {
-        Ok(spec) => {
-            let id = monitors::create(&state.db, user.org, &spec).await?;
-            Ok(redirect(&headers, &format!("/monitors/{id}")))
-        }
+    let limits = orgs::limits(&state.db, user.org, &state.config.plan).await?;
+    let result = match parse_spec(&state, &input, limits.min_interval_secs) {
+        Ok(spec) => created(
+            monitors::create(&state.db, user.org, &spec, limits.max_monitors).await,
+            "monitors",
+        )?,
+        Err(error) => Err(error),
+    };
+    match result {
+        Ok(id) => Ok(redirect(&headers, &format!("/monitors/{id}"))),
         Err(error) => {
             let selected = selected_ids(&input);
             let mut form = FormView::blank(channel_choices(&state, &user, Some(&selected)).await?);
             form.input = input;
             form.error = Some(error);
-            form_error(&headers, &user, "New monitor", form)
+            form_error(
+                &headers,
+                &user,
+                "New monitor",
+                form,
+                limits.min_interval_secs,
+            )
         }
     }
 }
@@ -311,6 +333,9 @@ pub async fn edit_page(
         form: FormView::from_monitor(&state, &monitor, choices),
         intervals: &INTERVALS,
         methods: &METHODS,
+        min_interval: orgs::limits(&state.db, user.org, &state.config.plan)
+            .await?
+            .min_interval_secs,
     };
     Ok(Html(page.render()?))
 }
@@ -322,7 +347,8 @@ pub async fn update(
     headers: HeaderMap,
     Form(input): Form<MonitorInput>,
 ) -> Result<Response, AppError> {
-    match parse_spec(&state, &input) {
+    let limits = orgs::limits(&state.db, user.org, &state.config.plan).await?;
+    match parse_spec(&state, &input, limits.min_interval_secs) {
         Ok(spec) => {
             if !monitors::update(&state.db, user.org, id, &spec).await? {
                 return Err(AppError::NotFound);
@@ -341,7 +367,13 @@ pub async fn update(
                 channels: channel_choices(&state, &user, Some(&selected)).await?,
                 error: Some(error),
             };
-            form_error(&headers, &user, "Edit monitor", form)
+            form_error(
+                &headers,
+                &user,
+                "Edit monitor",
+                form,
+                limits.min_interval_secs,
+            )
         }
     }
 }
@@ -351,12 +383,14 @@ fn form_error(
     user: &CurrentUser,
     title: &'static str,
     form: FormView,
+    min_interval: i32,
 ) -> Result<Response, AppError> {
     let html = if is_htmx(headers) {
         FormPartial {
             form,
             intervals: &INTERVALS,
             methods: &METHODS,
+            min_interval,
         }
         .render()?
     } else {
@@ -366,6 +400,7 @@ fn form_error(
             form,
             intervals: &INTERVALS,
             methods: &METHODS,
+            min_interval,
         }
         .render()?
     };
@@ -389,7 +424,11 @@ fn optional_number(
     }
 }
 
-fn parse_spec(state: &AppState, input: &MonitorInput) -> Result<MonitorSpec, String> {
+fn parse_spec(
+    state: &AppState,
+    input: &MonitorInput,
+    min_interval: i32,
+) -> Result<MonitorSpec, String> {
     let name = input.name.trim();
     if name.is_empty() {
         return Err("Give the monitor a name.".into());
@@ -409,6 +448,12 @@ fn parse_spec(state: &AppState, input: &MonitorInput) -> Result<MonitorSpec, Str
         .ok()
         .filter(|s| INTERVALS.iter().any(|(secs, _)| secs == s))
         .ok_or("Choose a check interval.")?;
+    if interval_secs < min_interval {
+        return Err(format!(
+            "Your plan checks at most every {}. Choose a longer interval.",
+            span(min_interval.into())
+        ));
+    }
     let timeout_secs = optional_number(
         &input.timeout_secs,
         1..=MAX_TIMEOUT_SECS,

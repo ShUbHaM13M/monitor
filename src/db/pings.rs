@@ -269,3 +269,42 @@ pub async fn record(
     tx.commit().await?;
     Ok(true)
 }
+
+/// Each check keeps at most this many pings…
+pub const KEEP_PER_CHECK: i64 = 100;
+/// …and none older than this. Pings that caused an incident are kept as long
+/// as the incident, so its "cause" stays viewable.
+pub const RETENTION_DAYS: i32 = 30;
+
+/// Deletes pings beyond the per-check cap or the age limit. Returns how many.
+pub async fn purge(db: &PgPool) -> sqlx::Result<u64> {
+    let old = sqlx::query!(
+        "DELETE FROM pings p
+         WHERE p.created_at < now() - make_interval(days => $1)
+           AND NOT EXISTS (SELECT 1 FROM incidents i WHERE i.cause_ping_id = p.id)",
+        RETENTION_DAYS,
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    // For each check, find its (KEEP_PER_CHECK + 1)th newest ping and delete it
+    // and everything older. Uses the (check_id, created_at DESC) index.
+    let excess = sqlx::query!(
+        "DELETE FROM pings p
+         USING checks c
+         CROSS JOIN LATERAL (
+             SELECT created_at, id FROM pings
+             WHERE check_id = c.id
+             ORDER BY created_at DESC, id DESC
+             OFFSET $1 LIMIT 1
+         ) cut
+         WHERE p.check_id = c.id
+           AND (p.created_at, p.id) <= (cut.created_at, cut.id)
+           AND NOT EXISTS (SELECT 1 FROM incidents i WHERE i.cause_ping_id = p.id)",
+        KEEP_PER_CHECK,
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+    Ok(old + excess)
+}

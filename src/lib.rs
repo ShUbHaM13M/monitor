@@ -5,5 +5,6 @@ pub mod db;
 pub mod domain;
 pub mod mail;
 pub mod notify;
+pub mod telemetry;
 pub mod web;
 pub mod worker;

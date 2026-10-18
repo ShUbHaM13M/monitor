@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM pings p\n         USING checks c\n         CROSS JOIN LATERAL (\n             SELECT created_at, id FROM pings\n             WHERE check_id = c.id\n             ORDER BY created_at DESC, id DESC\n             OFFSET $1 LIMIT 1\n         ) cut\n         WHERE p.check_id = c.id\n           AND (p.created_at, p.id) <= (cut.created_at, cut.id)\n           AND NOT EXISTS (SELECT 1 FROM incidents i WHERE i.cause_ping_id = p.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fca82144e5853993427d135903ed6267200a47c5a85f5efa35136c898fbbe6ca"
+}

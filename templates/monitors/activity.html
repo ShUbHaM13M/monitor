@@ -1,6 +1,6 @@
 {# Refreshes every 30s and right after "Check now"; skipped while a table is expanded. #}
 <div id="activity" hx-get="/monitors/{{ activity.id }}/activity"
-     hx-trigger="every 30s [!this.querySelector('details[open]')], monitor-checked from:body"
+     hx-trigger="every 30s, monitor-checked from:body" data-poll="unless-open"
      hx-swap="outerHTML">
   <section class="tiles">
     <div class="card tile">

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(max_checks, $2) AS \"max_checks!\",\n                  COALESCE(max_monitors, $3) AS \"max_monitors!\",\n                  COALESCE(max_channels, $4) AS \"max_channels!\",\n                  COALESCE(min_monitor_interval_secs, $5) AS \"min_interval_secs!\"\n           FROM orgs WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max_checks!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "max_monitors!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "max_channels!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "min_interval_secs!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f80bc3aa8f339a24974b3df925b5edc5e06459a70211504e8e2f254cc8ac962b"
+}

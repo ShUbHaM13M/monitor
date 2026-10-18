@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::channels;
+use super::orgs::{self, CreateError, Resource};
 use crate::auth::OrgId;
 use crate::domain::schedule::{Schedule, ScheduleError};
 
@@ -193,10 +194,16 @@ pub async fn get(db: &PgPool, org: OrgId, id: Uuid) -> sqlx::Result<Option<Check
     .await
 }
 
-/// Creates a heartbeat check in the org's oldest project.
-pub async fn create(db: &PgPool, org: OrgId, spec: &CheckSpec) -> sqlx::Result<Uuid> {
+/// Creates a check in the org's oldest project, unless the org already has `limit`.
+pub async fn create(
+    db: &PgPool,
+    org: OrgId,
+    spec: &CheckSpec,
+    limit: i32,
+) -> Result<Uuid, CreateError> {
     let cols = ScheduleColumns::from(&spec.schedule);
     let mut tx = db.begin().await?;
+    orgs::reserve(&mut tx, org, Resource::Checks, limit).await?;
     let id = sqlx::query_scalar!(
         "INSERT INTO checks (id, org_id, project_id, kind, name, token, schedule_kind,
                              cron_expr, tz, period_secs, grace_secs, max_runtime_secs,

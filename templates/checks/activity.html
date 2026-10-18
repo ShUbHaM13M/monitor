@@ -1,6 +1,6 @@
-{# Polls itself; skips a refresh while a ping body is expanded so it doesn't collapse. #}
+{# Polls itself; app.js skips a refresh while a ping body is expanded so it doesn't collapse. #}
 <div id="activity" hx-get="/checks/{{ activity.id }}/activity"
-     hx-trigger="every 10s [!this.querySelector('details[open]')]" hx-swap="outerHTML">
+     hx-trigger="every 10s" data-poll="unless-open" hx-swap="outerHTML">
   <section class="card stats">
     <div><span class="muted">Status</span><span class="pill {{ activity.status.css() }}">{{ activity.status.label() }}</span></div>
     <div><span class="muted">{% if activity.is_webhook %}Last delivery{% else %}Last ping{% endif %}</span>{{ activity.last_ping|safe }}</div>

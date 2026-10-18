@@ -4,6 +4,7 @@ mod auth;
 mod channels;
 mod charts;
 mod checks;
+pub mod client_ip;
 mod error;
 mod filter;
 mod incidents;
@@ -11,6 +12,7 @@ mod ingest;
 mod monitors;
 mod overview;
 mod pages;
+pub mod ratelimit;
 mod stamp;
 
 use std::net::SocketAddr;
@@ -18,8 +20,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::middleware;
+use axum::extract::{Request, State};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use sqlx::PgPool;
@@ -47,6 +50,7 @@ pub struct AppState {
     pub mailer: Option<Arc<Mailer>>,
     /// SSRF-guarded client for user-supplied URLs (HTTP monitors).
     pub http: reqwest::Client,
+    pub limits: Arc<ratelimit::Limits>,
 }
 
 impl AppState {
@@ -59,11 +63,48 @@ impl AppState {
             secrets: Arc::new(SecretBox::from_base64(&config.secret_key)?),
             channels: Arc::new(Registry::from_config(&config, mailer.clone())),
             http: crate::notify::http::client(config.allow_private_targets),
+            limits: Arc::default(),
             mailer,
             db,
             config,
         })
     }
+}
+
+/// No inline script or style, no eval, nothing from other origins, never framed.
+/// htmx is configured to match (see `layout.html`).
+const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
+                   connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/// Headers on every response, unless a handler set its own.
+async fn security_headers(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let mut res = next.run(req).await;
+    let headers = res.headers_mut();
+    let mut set = |name: HeaderName, value: &'static str| {
+        headers
+            .entry(name)
+            .or_insert(HeaderValue::from_static(value));
+    };
+    set(header::CONTENT_SECURITY_POLICY, CSP);
+    set(header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+    set(header::X_FRAME_OPTIONS, "DENY");
+    // Tokens travel in some URLs (confirmation and reset links); don't leak them.
+    set(header::REFERRER_POLICY, "same-origin");
+    set(
+        HeaderName::from_static("cross-origin-opener-policy"),
+        "same-origin",
+    );
+    set(
+        HeaderName::from_static("permissions-policy"),
+        "camera=(), microphone=(), geolocation=(), payment=()",
+    );
+    if state.config.secure_cookies() {
+        set(
+            header::STRICT_TRANSPORT_SECURITY,
+            "max-age=31536000; includeSubDomains",
+        );
+    }
+    res
 }
 
 pub fn router(state: AppState) -> Router {
@@ -130,7 +171,16 @@ pub fn router(state: AppState) -> Router {
             state.clone(),
             crate::auth::csrf::protect,
         ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            ratelimit::protect_forms,
+        ))
         .merge(ingest::routes())
+        .layer(middleware::from_fn(crate::telemetry::track_http))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            security_headers,
+        ))
         .with_state(state)
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
@@ -167,6 +217,26 @@ pub fn redirect(headers: &HeaderMap, to: &str) -> Response {
         }
     } else {
         Redirect::to(to).into_response()
+    }
+}
+
+/// Form error for a create that would exceed the org's plan.
+pub(crate) fn plan_limit_message(limit: i32, noun: &str) -> String {
+    format!(
+        "Your plan allows {limit} {noun}. Delete one you no longer need, or ask us to raise the limit."
+    )
+}
+
+/// Turns a plan-limit failure into a form error; database errors propagate.
+pub(crate) fn created(
+    result: Result<uuid::Uuid, crate::db::orgs::CreateError>,
+    noun: &str,
+) -> Result<Result<uuid::Uuid, String>, AppError> {
+    use crate::db::orgs::CreateError;
+    match result {
+        Ok(id) => Ok(Ok(id)),
+        Err(CreateError::LimitReached(limit)) => Ok(Err(plan_limit_message(limit, noun))),
+        Err(CreateError::Db(err)) => Err(err.into()),
     }
 }
 

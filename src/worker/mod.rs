@@ -9,7 +9,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::auth::session;
-use crate::db::{monitors, user_tokens};
+use crate::db::{monitors, notifications, pings, user_tokens};
 use crate::web::AppState;
 
 /// Runs all background loops until `shutdown` is cancelled.
@@ -87,6 +87,14 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
                 if deleted > 0 {
                     tracing::info!(deleted, "removed old uptime results");
                 }
+                let deleted = pings::purge(&db).await?;
+                if deleted > 0 {
+                    tracing::info!(deleted, "removed old pings");
+                }
+                let deleted = notifications::purge(&db).await?;
+                if deleted > 0 {
+                    tracing::info!(deleted, "removed old notifications");
+                }
                 Ok(())
             }
         },
@@ -117,7 +125,12 @@ async fn periodic<F, Fut>(
         tokio::select! {
             _ = shutdown.cancelled() => break,
             _ = interval.tick() => {
-                if let Err(err) = tick().await {
+                let started = std::time::Instant::now();
+                let result = tick().await;
+                metrics::histogram!("worker_tick_duration_seconds", "task" => name)
+                    .record(started.elapsed().as_secs_f64());
+                if let Err(err) = result {
+                    metrics::counter!("worker_tick_errors_total", "task" => name).increment(1);
                     tracing::error!(task = name, error = ?err, "tick failed");
                 }
             }

@@ -91,6 +91,28 @@
     if (icon) icon.href = down > 0 ? "/static/favicon-down.svg" : "/static/favicon.svg";
   }
 
+  // ── Polling etiquette ──
+  // Elements marked data-poll refresh on a timer and when the tab becomes
+  // visible. Skip those automatic refreshes while the tab is hidden, and for
+  // data-poll="unless-open" while the user has a <details> expanded inside.
+  // (htmx trigger filters would do this, but they need eval, which the CSP bans.)
+  document.addEventListener("htmx:beforeRequest", (evt) => {
+    const elt = evt.detail.elt;
+    if (!elt.hasAttribute || !elt.hasAttribute("data-poll")) return;
+    // htmx passes no event for `every Ns` polls.
+    const type = evt.detail.requestConfig?.triggeringEvent?.type;
+    if (type !== undefined && type !== "visibilitychange") return;
+    const reading = elt.dataset.poll === "unless-open" && elt.querySelector("details[open]");
+    if (document.hidden || reading) evt.preventDefault();
+  });
+
+  // A "too many attempts" notice goes stale once a later submit gets through.
+  document.addEventListener("htmx:afterRequest", (evt) => {
+    const flash = document.getElementById("flash");
+    const status = evt.detail.xhr?.status ?? 0;
+    if (flash && status !== 429 && evt.detail.requestConfig?.verb !== "get") flash.replaceChildren();
+  });
+
   function enhance(root) {
     localTimes(root);
     copyButtons(root);

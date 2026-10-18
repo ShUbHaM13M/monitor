@@ -36,6 +36,9 @@ pub fn test_config() -> Config {
         smtp_from: "Monitor <alerts@monitor.test>".into(),
         // Webhook tests target a local wiremock server.
         allow_private_targets: true,
+        trusted_proxies: Vec::new(),
+        metrics_addr: None,
+        plan: Default::default(),
     }
 }
 

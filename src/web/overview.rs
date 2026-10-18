@@ -11,7 +11,7 @@ use super::stamp::Stamp;
 use super::{AppError, AppState, Chrome};
 use crate::auth::CurrentUser;
 use crate::db::incidents::{self, IncidentState};
-use crate::db::overview;
+use crate::db::{orgs, overview};
 
 /// Failed alert deliveries are flagged for this long.
 const DELIVERY_WINDOW_HOURS: i32 = 24;
@@ -48,6 +48,8 @@ struct Group {
     total: i64,
     down: i64,
     counts: Vec<StatusCount>,
+    /// The org's plan limit.
+    limit: i32,
 }
 
 impl Group {
@@ -70,6 +72,7 @@ impl Group {
             new_href,
             noun,
             total: rows.iter().map(|(_, n)| n).sum(),
+            limit: 0,
             down: count_of("down"),
             counts: states
                 .iter()
@@ -179,6 +182,15 @@ async fn live(state: &AppState, user: &CurrentUser) -> Result<Live, AppError> {
         MONITOR_STATES,
         &overview::monitor_counts(db, user.org).await?,
     );
+    let limits = orgs::limits(db, user.org, &state.config.plan).await?;
+    let checks = Group {
+        limit: limits.max_checks,
+        ..checks
+    };
+    let monitors = Group {
+        limit: limits.max_monitors,
+        ..monitors
+    };
     let channels = overview::channel_health(db, user.org).await?;
     let failing: Vec<FailingChannel> =
         overview::failing_channels(db, user.org, DELIVERY_WINDOW_HOURS)

@@ -1,0 +1,9 @@
+target
+.git
+.env
+.claude
+deploy
+tests
+*.md
+docker-compose*.yml
+Dockerfile

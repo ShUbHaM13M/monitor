@@ -39,6 +39,13 @@ async fn deliver(
     item: Claimed,
 ) -> sqlx::Result<()> {
     let outcome = send(registry, secrets, &item).await;
+    let result = match &outcome {
+        Ok(()) => "sent",
+        Err(SendError::Retryable(_)) if item.attempts < MAX_ATTEMPTS => "retry",
+        Err(_) => "dead",
+    };
+    metrics::counter!("alerts_total", "kind" => item.channel_kind.clone(), "result" => result)
+        .increment(1);
     match outcome {
         Ok(()) => {
             tracing::info!(

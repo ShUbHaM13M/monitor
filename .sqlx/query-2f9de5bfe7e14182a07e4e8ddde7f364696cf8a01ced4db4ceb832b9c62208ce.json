@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM notifications\n         WHERE status IN ('sent', 'dead') AND created_at < now() - make_interval(days => $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f9de5bfe7e14182a07e4e8ddde7f364696cf8a01ced4db4ceb832b9c62208ce"
+}

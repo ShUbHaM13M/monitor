@@ -12,7 +12,7 @@
 </div>
 
 <div id="overview" hx-get="/dashboard/live" hx-swap="innerHTML"
-     hx-trigger="every 10s [!document.hidden], visibilitychange[!document.hidden] from:document">
+     hx-trigger="every 10s, visibilitychange from:document" data-poll>
   {% include "overview/live.html" %}
 </div>
 {% endblock %}

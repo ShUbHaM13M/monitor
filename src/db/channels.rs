@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use super::orgs::{self, CreateError, Resource};
 use crate::auth::OrgId;
 
 /// How long a confirmation link stays valid.
@@ -76,9 +77,15 @@ pub struct NewChannel<'a> {
     pub attach_to_all_checks: bool,
 }
 
-pub async fn create(db: &PgPool, org: OrgId, new: NewChannel<'_>) -> sqlx::Result<Uuid> {
+pub async fn create(
+    db: &PgPool,
+    org: OrgId,
+    new: NewChannel<'_>,
+    limit: i32,
+) -> Result<Uuid, CreateError> {
     let id = Uuid::now_v7();
     let mut tx = db.begin().await?;
+    orgs::reserve(&mut tx, org, Resource::Channels, limit).await?;
     sqlx::query!(
         "INSERT INTO channels (id, org_id, kind, name, config_enc, verified_at, verify_token_hash, verify_sent_at)
          VALUES ($1, $2, $3, $4, $5,

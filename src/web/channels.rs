@@ -12,11 +12,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{AppError, AppState, Chrome, is_htmx, redirect};
+use super::{AppError, AppState, Chrome, created, is_htmx, redirect};
 use crate::auth::{CurrentUser, MaybeUser};
 use crate::crypto::{random_token, sha256};
 use crate::db::channels::{self, Channel, NewChannel};
-use crate::db::notifications;
+use crate::db::{notifications, orgs};
 use crate::domain::time::relative;
 use crate::notify::kind::{FieldValues, Input};
 use crate::notify::{Alert, ChannelCtx, ChannelKind, Verification};
@@ -242,7 +242,8 @@ pub async fn create(
     let sealed = state
         .secrets
         .seal(&serde_json::to_vec(&config).map_err(anyhow::Error::from)?);
-    let id = channels::create(
+    let limits = orgs::limits(&state.db, user.org, &state.config.plan).await?;
+    let result = channels::create(
         &state.db,
         user.org,
         NewChannel {
@@ -253,8 +254,13 @@ pub async fn create(
             verify_token_hash: token.as_deref().map(sha256),
             attach_to_all_checks: values.contains_key("attach_all"),
         },
+        limits.max_channels,
     )
-    .await?;
+    .await;
+    let id = match created(result, "alert channels")? {
+        Ok(id) => id,
+        Err(error) => return form_error(&headers, &user, kind.as_ref(), &values, error),
+    };
     if let Some(token) = token {
         send_verification(&state, kind.as_ref(), &config, &token).await;
     }

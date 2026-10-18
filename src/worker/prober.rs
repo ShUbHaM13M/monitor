@@ -19,6 +19,10 @@ pub async fn tick(state: &AppState) -> anyhow::Result<usize> {
     futures::stream::iter(due)
         .for_each_concurrent(CONCURRENCY, |target| async move {
             let outcome = probe(state, &target).await;
+            metrics::counter!("probes_total", "result" => if outcome.ok { "ok" } else { "failed" })
+                .increment(1);
+            metrics::histogram!("probe_duration_seconds")
+                .record(f64::from(outcome.latency_ms) / 1000.0);
             if let Err(err) =
                 monitors::record_result(&state.db, &state.config.base_url, target.id, &outcome)
                     .await

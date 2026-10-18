@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use super::orgs::{self, CreateError, Resource};
 use super::{channels, incidents, notifications};
 use crate::auth::OrgId;
 use crate::domain::uptime::{self, Event, MonitorStatus, Outcome};
@@ -127,8 +128,14 @@ pub async fn get(db: &PgPool, org: OrgId, id: Uuid) -> sqlx::Result<Option<Monit
 
 /// Creates a monitor in the org's oldest project. The first check runs at a random
 /// point within one interval, so monitors created together don't fire together.
-pub async fn create(db: &PgPool, org: OrgId, spec: &MonitorSpec) -> sqlx::Result<Uuid> {
+pub async fn create(
+    db: &PgPool,
+    org: OrgId,
+    spec: &MonitorSpec,
+    limit: i32,
+) -> Result<Uuid, CreateError> {
     let mut tx = db.begin().await?;
+    orgs::reserve(&mut tx, org, Resource::Monitors, limit).await?;
     let id = sqlx::query_scalar!(
         "INSERT INTO http_monitors (id, org_id, project_id, name, url, method, headers_enc, body,
                                     interval_secs, timeout_ms, expected_status, body_contains,

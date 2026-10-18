@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -117,13 +118,59 @@ pub async fn mark_email_verified(conn: &mut PgConnection, user_id: Uuid) -> sqlx
     Ok(())
 }
 
+/// Attempts allowed before the account starts locking.
+const LOGIN_ATTEMPTS: i32 = 5;
+
+/// Counts a login attempt *before* the password is checked, so parallel guesses
+/// can't slip past the limit; `login_succeeded` takes it back. From the 5th
+/// unconfirmed attempt on, the account locks for 1, 2, 4… minutes (capped at an
+/// hour). Returns `Some(until)` when it's locked and the attempt must not run.
+pub async fn begin_login_attempt(
+    db: &PgPool,
+    user_id: Uuid,
+) -> sqlx::Result<Option<DateTime<Utc>>> {
+    let counted = sqlx::query_scalar!(
+        "UPDATE users
+         SET failed_logins = failed_logins + 1,
+             locked_until = CASE
+                 WHEN failed_logins + 1 >= $2 THEN now() + LEAST(
+                     make_interval(mins => power(2, LEAST(failed_logins + 1 - $2, 6))::int),
+                     interval '1 hour')
+                 ELSE locked_until
+             END
+         WHERE id = $1 AND (locked_until IS NULL OR locked_until <= now())
+         RETURNING id",
+        user_id,
+        LOGIN_ATTEMPTS,
+    )
+    .fetch_optional(db)
+    .await?;
+    if counted.is_some() {
+        return Ok(None);
+    }
+    sqlx::query_scalar!("SELECT locked_until FROM users WHERE id = $1", user_id)
+        .fetch_one(db)
+        .await
+}
+
+pub async fn login_succeeded(db: &PgPool, user_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = $1",
+        user_id,
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Also lifts any login lock: whoever reset it controls the mailbox.
 pub async fn set_password(
     conn: &mut PgConnection,
     user_id: Uuid,
     password_hash: &str,
 ) -> sqlx::Result<()> {
     sqlx::query!(
-        "UPDATE users SET password_hash = $2 WHERE id = $1",
+        "UPDATE users SET password_hash = $2, failed_logins = 0, locked_until = NULL WHERE id = $1",
         user_id,
         password_hash,
     )

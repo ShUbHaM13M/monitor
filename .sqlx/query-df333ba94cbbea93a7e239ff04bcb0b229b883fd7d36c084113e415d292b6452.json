@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.status AS \"status!\", count(c.id) AS \"n!\"\n           FROM unnest(ARRAY['new','up','started','down','paused']) AS s(status)\n           LEFT JOIN checks c ON c.status = s.status\n           GROUP BY s.status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "df333ba94cbbea93a7e239ff04bcb0b229b883fd7d36c084113e415d292b6452"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n         SET failed_logins = failed_logins + 1,\n             locked_until = CASE\n                 WHEN failed_logins + 1 >= $2 THEN now() + LEAST(\n                     make_interval(mins => power(2, LEAST(failed_logins + 1 - $2, 6))::int),\n                     interval '1 hour')\n                 ELSE locked_until\n             END\n         WHERE id = $1 AND (locked_until IS NULL OR locked_until <= now())\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5a62c46e43bdf14d1a715ade3e8c1ace024c970f9b09dc2dc275d3592469bf1e"
+}

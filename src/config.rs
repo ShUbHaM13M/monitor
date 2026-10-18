@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use clap::{Args, ValueEnum};
+use ipnet::IpNet;
 
 /// Runtime configuration. Every field can be set by flag or environment variable;
 /// a `.env` file is loaded first in development.
@@ -43,6 +44,56 @@ pub struct Config {
     /// addresses. Only for development: in production it allows SSRF.
     #[arg(long, env = "ALLOW_PRIVATE_TARGETS", default_value_t = false)]
     pub allow_private_targets: bool,
+
+    /// Reverse proxies whose `X-Forwarded-For` is believed, as comma-separated
+    /// addresses or CIDRs (e.g. `127.0.0.1,172.28.0.0/16`). Empty: the TCP peer
+    /// is the client, and `X-Forwarded-For` is ignored.
+    #[arg(long, env = "TRUSTED_PROXIES", value_delimiter = ',', value_parser = parse_net)]
+    pub trusted_proxies: Vec<IpNet>,
+
+    /// Serve Prometheus metrics at `/metrics` on this address (keep it private,
+    /// e.g. `127.0.0.1:9090`). Off when unset.
+    #[arg(long, env = "METRICS_ADDR")]
+    pub metrics_addr: Option<SocketAddr>,
+
+    #[command(flatten)]
+    pub plan: PlanDefaults,
+}
+
+/// Limits for orgs without their own (see the `orgs.max_*` columns).
+#[derive(Debug, Clone, Args)]
+pub struct PlanDefaults {
+    #[arg(long, env = "PLAN_MAX_CHECKS", default_value_t = 100)]
+    pub max_checks: i32,
+
+    #[arg(long, env = "PLAN_MAX_MONITORS", default_value_t = 20)]
+    pub max_monitors: i32,
+
+    #[arg(long, env = "PLAN_MAX_CHANNELS", default_value_t = 10)]
+    pub max_channels: i32,
+
+    /// Shortest interval an HTTP monitor may use.
+    #[arg(long, env = "PLAN_MIN_INTERVAL_SECS", default_value_t = 30)]
+    pub min_interval_secs: i32,
+}
+
+impl Default for PlanDefaults {
+    fn default() -> Self {
+        Self {
+            max_checks: 100,
+            max_monitors: 20,
+            max_channels: 10,
+            min_interval_secs: 30,
+        }
+    }
+}
+
+/// A single address counts as a /32 (or /128).
+fn parse_net(s: &str) -> Result<IpNet, String> {
+    let s = s.trim();
+    s.parse::<IpNet>()
+        .or_else(|_| s.parse::<std::net::IpAddr>().map(IpNet::from))
+        .map_err(|_| format!("not an IP address or CIDR: {s:?}"))
 }
 
 impl Config {

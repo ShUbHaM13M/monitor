@@ -10,13 +10,13 @@ use uuid::Uuid;
 
 use super::filter::{self, Chip, ListQuery};
 use super::stamp::Stamp;
-use super::{AppError, AppState, Chrome, is_htmx, redirect};
+use super::{AppError, AppState, Chrome, created, is_htmx, redirect};
 use crate::auth::CurrentUser;
 use crate::crypto::SecretBox;
-use crate::db::channels;
 use crate::db::checks::{self, Check, CheckKind, CheckSpec, CheckStatus, SignatureSpec};
 use crate::db::incidents::{self, Incident};
 use crate::db::pings::{self, Ping};
+use crate::db::{channels, orgs};
 use crate::domain::schedule::Schedule;
 use crate::domain::signature::Scheme;
 use crate::domain::time::{duration, span};
@@ -341,11 +341,18 @@ pub async fn create(
     headers: HeaderMap,
     Form(input): Form<CheckInput>,
 ) -> Result<Response, AppError> {
-    match parse_spec(&input, None, &state.secrets) {
+    let result = match parse_spec(&input, None, &state.secrets) {
         Ok(spec) => {
-            let id = checks::create(&state.db, user.org, &spec).await?;
-            Ok(redirect(&headers, &format!("/checks/{id}")))
+            let limits = orgs::limits(&state.db, user.org, &state.config.plan).await?;
+            created(
+                checks::create(&state.db, user.org, &spec, limits.max_checks).await,
+                "checks",
+            )?
         }
+        Err(error) => Err(error),
+    };
+    match result {
+        Ok(id) => Ok(redirect(&headers, &format!("/checks/{id}"))),
         Err(error) => {
             let selected = selected_ids(&input);
             let mut form = FormView::blank(channel_choices(&state, &user, Some(&selected)).await?);

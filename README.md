@@ -42,6 +42,7 @@ Alert tests deliver to a wiremock server and to Mailpit, so both containers must
 | `monitor worker` | background workers only (scheduler, prober, notifier) |
 | `monitor migrate` | apply pending migrations and exit |
 | `monitor gen-key` | print a new random `SECRET_KEY` |
+| `monitor healthcheck` | exit 0 if the local server answers `/healthz` (for container health checks) |
 
 All settings are flags or environment variables; see `monitor --help` and `.env.example`.
 
@@ -50,6 +51,49 @@ All settings are flags or environment variables; see `monitor --help` and `.env.
 | `SECRET_KEY` | Required. Encrypts channel configs (webhook URLs, secrets) at rest. Losing it makes existing channels unreadable. |
 | `SMTP_URL`, `SMTP_FROM` | Enable email channels. `smtp://localhost:1025` is Mailpit; use `smtps://user:pass@host` in production. |
 | `ALLOW_PRIVATE_TARGETS` | Lets webhooks reach localhost/private IPs. Dev only: enabling it in production allows SSRF. |
+| `TRUSTED_PROXIES` | Comma-separated IPs/CIDRs of your reverse proxies. Only their `X-Forwarded-For` is believed, read from the right; unset means the TCP peer is the client. |
+| `METRICS_ADDR` | Serve Prometheus metrics at `/metrics` on this address. Keep it private; off when unset. |
+| `PLAN_MAX_CHECKS`, `PLAN_MAX_MONITORS`, `PLAN_MAX_CHANNELS`, `PLAN_MIN_INTERVAL_SECS` | Default plan limits (100, 20, 10, 30 s). Override one org with `UPDATE orgs SET max_checks = 500 WHERE …`. |
+
+## Deploying
+
+`Dockerfile` builds one binary, with templates, static files and migrations embedded, into a
+distroless image that runs as a non-root user. No database is needed at build time: it uses the
+committed `.sqlx/`. `deploy/` runs it behind
+Caddy with automatic HTTPS:
+
+```sh
+cd deploy
+cp .env.example .env        # DOMAIN, POSTGRES_PASSWORD, SECRET_KEY, SMTP_URL
+docker compose up -d --build
+```
+
+The stack is Postgres, a one-shot `migrate` container, the app (`monitor all`), and Caddy, the
+only service with published ports. Caddy has a fixed address that is the app's only trusted
+proxy. On `SIGTERM` the app stops taking connections, finishes in-flight requests and the
+current worker ticks, then exits. Several `monitor worker` processes can run side by side.
+
+**Hardening built in:**
+- **Rate limits** (per process): pings and webhook deliveries per token (burst 60, then 1/s)
+  and per client (burst 300, then 20/s), answered with `429` and `Retry-After`. Login, signup,
+  password reset and confirmation forms are limited per client address.
+- **Login throttling** (in Postgres, so it holds across instances): from the 5th unsuccessful
+  attempt an account locks for 1 minute, doubling up to an hour. A successful login or a
+  password reset clears it.
+- **Retention:** each check keeps its newest 100 pings and none older than 30 days (a ping that
+  caused an incident is kept with it). Uptime results keep 7 days and hourly rollups 90 days.
+  Delivered or abandoned alerts keep 90 days. Cleanup runs hourly.
+- **Plan limits** per org, checked inside the creating transaction so concurrent requests can't
+  overshoot.
+- **Headers:** a strict Content-Security-Policy (no inline script or style, no `eval`; htmx is
+  configured to match), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, and
+  HSTS when `BASE_URL` is HTTPS.
+
+**Metrics** (`METRICS_ADDR`): `http_requests_total` and `http_request_duration_seconds` by route
+template; `pings_total`, `probes_total`, `alerts_total`, `logins_total`, `rate_limited_total`;
+`worker_tick_duration_seconds` and `worker_tick_errors_total`; and, read from the database at
+scrape time, `checks` and `http_monitors` by status, `incidents_open`, `alerts_queued`,
+`alerts_overdue` (should be zero: the notifier is behind) and the connection pool size.
 
 ## Layout
 

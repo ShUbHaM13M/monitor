@@ -188,3 +188,17 @@ pub async fn recent_for_channel(
     .fetch_all(db)
     .await
 }
+
+/// Delivered and abandoned alerts are kept this long for the channel pages.
+const RETENTION_DAYS: i32 = 90;
+
+pub async fn purge(db: &PgPool) -> sqlx::Result<u64> {
+    let res = sqlx::query!(
+        "DELETE FROM notifications
+         WHERE status IN ('sent', 'dead') AND created_at < now() - make_interval(days => $1)",
+        RETENTION_DAYS,
+    )
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected())
+}

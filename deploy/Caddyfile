@@ -1,0 +1,20 @@
+# Automatic HTTPS for $DOMAIN (Let's Encrypt). Point the domain's DNS at this
+# host and open ports 80 and 443 before the first start.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Caddy replaces any X-Forwarded-For the client sent with the real client
+	# address, and the app trusts only Caddy's (TRUSTED_PROXIES).
+	reverse_proxy app:3000 {
+		# Ping and webhook senders often retry quickly; fail fast while the app restarts.
+		lb_try_duration 5s
+	}
+
+	# The app sets its own security headers; just drop the server banner.
+	header -Server
+
+	log {
+		output stdout
+		format json
+	}
+}

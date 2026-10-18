@@ -1,21 +1,26 @@
-use std::net::SocketAddr;
-
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{ConnectInfo, DefaultBodyLimit, Path, State};
-use axum::http::{Extensions, HeaderMap, Method, StatusCode, header};
+use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::http::{HeaderMap, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
+use super::client_ip::ClientIp;
+use super::ratelimit::too_many_plain;
 use super::{AppError, AppState};
 use crate::db::pings::{self, Endpoint, PingMeta};
 use crate::domain::ping::{Signal, capture_headers, head_utf8, tail_utf8};
 use crate::domain::signature::{self, Scheme};
 
+const UNKNOWN_PING: &str = "Unknown ping URL.\n";
+const UNKNOWN_WEBHOOK: &str = "Unknown webhook URL.\n";
+
 /// Requests up to this size are accepted; only `MAX_STORED_BODY` bytes are kept.
 const MAX_REQUEST_BODY: usize = 1024 * 1024;
 const MAX_STORED_BODY: usize = 10 * 1024;
 const MAX_USER_AGENT: usize = 512;
+/// Tokens are 22 characters; anything much longer can't be one.
+const MAX_TOKEN: usize = 64;
 
 /// Endpoints called by jobs and third-party services. Mounted outside the CSRF
 /// layer: the token in the URL is the credential, and these clients send no `Origin`.
@@ -30,25 +35,17 @@ pub fn routes() -> Router<AppState> {
 async fn ping(
     State(state): State<AppState>,
     Path(token): Path<String>,
-    extensions: Extensions,
+    ip: ClientIp,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, AppError> {
-    handle(
-        &state,
-        &token,
-        Signal::Success,
-        &extensions,
-        &headers,
-        &body,
-    )
-    .await
+    handle(&state, &token, Signal::Success, ip, &headers, &body).await
 }
 
 async fn ping_signal(
     State(state): State<AppState>,
     Path((token, signal)): Path<(String, String)>,
-    extensions: Extensions,
+    ip: ClientIp,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, AppError> {
@@ -59,16 +56,34 @@ async fn ping_signal(
         )
             .into_response());
     };
-    handle(&state, &token, signal, &extensions, &headers, &body).await
+    handle(&state, &token, signal, ip, &headers, &body).await
 }
 
-fn base_meta(extensions: &Extensions, headers: &HeaderMap) -> PingMeta {
+/// `Some(response)` when the request must be turned away before touching the
+/// database: an impossible token or a client over its rate limit.
+fn turn_away(
+    state: &AppState,
+    token: &str,
+    ClientIp(ip): ClientIp,
+    not_found: &'static str,
+) -> Option<Response> {
+    if token.len() > MAX_TOKEN {
+        return Some((StatusCode::NOT_FOUND, not_found).into_response());
+    }
+    if let Some(ip) = ip
+        && let Err(wait) = state.limits.ingest_ip.check(ip)
+    {
+        return Some(too_many_plain("ingest_ip", wait));
+    }
+    if let Err(wait) = state.limits.ingest_token.check(token.to_owned()) {
+        return Some(too_many_plain("ingest_token", wait));
+    }
+    None
+}
+
+fn base_meta(ClientIp(ip): ClientIp, headers: &HeaderMap) -> PingMeta {
     PingMeta {
-        // Present when served via `into_make_service_with_connect_info`; trusted
-        // proxy headers (X-Forwarded-For) are not honoured yet.
-        source_ip: extensions
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|ConnectInfo(addr)| addr.ip()),
+        source_ip: ip,
         user_agent: headers
             .get(header::USER_AGENT)
             .and_then(|v| v.to_str().ok())
@@ -81,14 +96,17 @@ async fn handle(
     state: &AppState,
     token: &str,
     signal: Signal,
-    extensions: &Extensions,
+    ip: ClientIp,
     headers: &HeaderMap,
     body: &[u8],
 ) -> Result<Response, AppError> {
+    if let Some(res) = turn_away(state, token, ip, UNKNOWN_PING) {
+        return Ok(res);
+    }
     let meta = PingMeta {
         // Job output: the end is where the errors are.
         body: (!body.is_empty()).then(|| tail_utf8(body, MAX_STORED_BODY)),
-        ..base_meta(extensions, headers)
+        ..base_meta(ip, headers)
     };
     let found = pings::record(
         &state.db,
@@ -99,12 +117,14 @@ async fn handle(
         meta,
     )
     .await?;
+    metrics::counter!("pings_total", "endpoint" => "ping", "result" => if found { "accepted" } else { "unknown" })
+        .increment(1);
     Ok(if found {
         (StatusCode::OK, "OK\n").into_response()
     } else {
         // Tokens are 128-bit random values, so a 404 can't be used to enumerate
         // them, and it tells users their ping URL is wrong.
-        (StatusCode::NOT_FOUND, "Unknown ping URL.\n").into_response()
+        (StatusCode::NOT_FOUND, UNKNOWN_PING).into_response()
     })
 }
 
@@ -114,12 +134,17 @@ async fn webhook(
     State(state): State<AppState>,
     Path(token): Path<String>,
     method: Method,
-    extensions: Extensions,
+    ip: ClientIp,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, AppError> {
+    if let Some(res) = turn_away(&state, &token, ip, UNKNOWN_WEBHOOK) {
+        return Ok(res);
+    }
     let Some(target) = pings::webhook_target(&state.db, &token).await? else {
-        return Ok((StatusCode::NOT_FOUND, "Unknown webhook URL.\n").into_response());
+        metrics::counter!("pings_total", "endpoint" => "webhook", "result" => "unknown")
+            .increment(1);
+        return Ok((StatusCode::NOT_FOUND, UNKNOWN_WEBHOOK).into_response());
     };
     let (stored_body, truncated) = head_utf8(&body, MAX_STORED_BODY);
     let meta = PingMeta {
@@ -131,11 +156,13 @@ async fn webhook(
                 .iter()
                 .map(|(name, value)| (name.as_str(), value.as_bytes())),
         )),
-        ..base_meta(&extensions, &headers)
+        ..base_meta(ip, &headers)
     };
 
     if let Some(rejection) = check_signature(&state, &target, &headers, &body) {
         pings::record_rejected(&state.db, target.id, meta, &rejection).await?;
+        metrics::counter!("pings_total", "endpoint" => "webhook", "result" => "rejected")
+            .increment(1);
         return Ok((
             StatusCode::UNAUTHORIZED,
             format!("Rejected: {rejection}.\n"),
@@ -151,6 +178,7 @@ async fn webhook(
         meta,
     )
     .await?;
+    metrics::counter!("pings_total", "endpoint" => "webhook", "result" => "accepted").increment(1);
     Ok((StatusCode::OK, "OK\n").into_response())
 }
 

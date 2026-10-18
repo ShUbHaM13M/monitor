@@ -4,6 +4,7 @@ use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -125,7 +126,7 @@ fn signup_error(headers: &HeaderMap, form: SignupView) -> Result<Response, AppEr
 pub struct LoginView {
     email: String,
     next: String,
-    error: Option<&'static str>,
+    error: Option<String>,
     notice: Option<&'static str>,
 }
 
@@ -189,6 +190,19 @@ pub async fn login(
     let next = safe_next(&input.next);
 
     let candidate = users::find_for_login(&state.db, email).await?;
+    if let Some(c) = &candidate
+        && let Some(until) = users::begin_login_attempt(&state.db, c.user_id).await?
+    {
+        let mins = ((until - Utc::now()).num_seconds().max(1) as u64).div_ceil(60);
+        tracing::warn!(email, "login refused: account locked");
+        metrics::counter!("logins_total", "result" => "locked").increment(1);
+        let error = format!(
+            "Too many failed attempts. Try again in {mins} minute{}, or reset your password.",
+            if mins == 1 { "" } else { "s" }
+        );
+        return login_error(&headers, email, next, error);
+    }
+    let user_id = candidate.as_ref().map(|c| c.user_id);
     let (stored_hash, ids) = match candidate {
         Some(c) => (
             Some(c.password_hash),
@@ -198,32 +212,46 @@ pub async fn login(
     };
     let password_ok = password::verify(input.password, stored_hash).await?;
 
+    if password_ok && let Some(user_id) = user_id {
+        users::login_succeeded(&state.db, user_id).await?;
+    }
     match (password_ok, ids) {
         (true, Some((user_id, org_id))) => {
+            metrics::counter!("logins_total", "result" => "ok").increment(1);
             start_session(&state, jar, &headers, user_id, org_id, next).await
         }
         (ok, _) => {
             if ok {
                 tracing::warn!(email, "login for a user without any org membership");
             }
-            let form = LoginView {
-                email: email.to_owned(),
-                next: next.to_owned(),
-                error: Some("Invalid email or password."),
-                notice: None,
-            };
-            let html = if is_htmx(&headers) {
-                LoginForm { form }.render()?
-            } else {
-                LoginPage {
-                    chrome: Chrome::anonymous(),
-                    form,
-                }
-                .render()?
-            };
-            Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
+            metrics::counter!("logins_total", "result" => "failed").increment(1);
+            login_error(&headers, email, next, "Invalid email or password.".into())
         }
     }
+}
+
+fn login_error(
+    headers: &HeaderMap,
+    email: &str,
+    next: &str,
+    error: String,
+) -> Result<Response, AppError> {
+    let form = LoginView {
+        email: email.to_owned(),
+        next: next.to_owned(),
+        error: Some(error),
+        notice: None,
+    };
+    let html = if is_htmx(headers) {
+        LoginForm { form }.render()?
+    } else {
+        LoginPage {
+            chrome: Chrome::anonymous(),
+            form,
+        }
+        .render()?
+    };
+    Ok((StatusCode::UNPROCESSABLE_ENTITY, Html(html)).into_response())
 }
 
 pub async fn logout(

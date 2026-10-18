@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM pings p\n         WHERE p.created_at < now() - make_interval(days => $1)\n           AND NOT EXISTS (SELECT 1 FROM incidents i WHERE i.cause_ping_id = p.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3733dcda231bba575cf910ef889a2d04936243aec429f7fcf4e448dcc7ffbf39"
+}
