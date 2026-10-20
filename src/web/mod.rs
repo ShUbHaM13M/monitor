@@ -1,7 +1,9 @@
 mod account;
+mod api;
+mod api_keys;
 mod assets;
 mod auth;
-mod channels;
+pub(crate) mod channels;
 mod charts;
 mod checks;
 pub mod client_ip;
@@ -134,6 +136,8 @@ pub fn router(state: AppState) -> Router {
         .route("/monitors/{id}/pause", post(monitors::pause))
         .route("/monitors/{id}/resume", post(monitors::resume))
         .route("/monitors/{id}/delete", post(monitors::delete))
+        .route("/api-keys", get(api_keys::list).post(api_keys::create))
+        .route("/api-keys/{id}/delete", post(api_keys::delete))
         .route("/channels", get(channels::list))
         .route("/channels/new", get(channels::new_picker))
         .route(
@@ -176,6 +180,7 @@ pub fn router(state: AppState) -> Router {
             ratelimit::protect_forms,
         ))
         .merge(ingest::routes())
+        .merge(api::routes())
         .layer(middleware::from_fn(crate::telemetry::track_http))
         .layer(middleware::from_fn_with_state(
             state.clone(),

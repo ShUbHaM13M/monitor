@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, name, status AS \"status: CheckStatus\", schedule_kind, cron_expr, tz,\n                  period_secs, grace_secs, max_runtime_secs, last_start_at, alert_after,\n                  now() AS \"now!\"\n           FROM checks WHERE token = $1 AND kind = $2 FOR UPDATE",
+  "query": "SELECT id, org_id, name, status AS \"status: CheckStatus\", schedule_kind, cron_expr, tz,\n                  period_secs, grace_secs, max_runtime_secs, last_start_at, alert_after,\n                  duration_alerts, now() AS \"now!\"\n           FROM checks WHERE token = $1 AND kind = $2 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -137,6 +137,17 @@
       },
       {
         "ordinal": 12,
+        "name": "duration_alerts",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "duration_alerts"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
         "name": "now!",
         "type_info": "Timestamptz",
         "origin": "Expression"
@@ -161,8 +172,9 @@
       true,
       true,
       true,
+      false,
       null
     ]
   },
-  "hash": "44f16d844888b62da1fb1c5e160640238891656dd80ee58dbf82cabf0368d892"
+  "hash": "6c6443efb52431b0f557b159dc96e9ecd488e8f16e193219a2eea2362dbcd0cb"
 }

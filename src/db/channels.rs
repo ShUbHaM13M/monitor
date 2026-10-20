@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
@@ -214,6 +216,36 @@ pub async fn options(db: &PgPool, org: OrgId) -> sqlx::Result<Vec<ChannelOption>
     )
     .fetch_all(db)
     .await
+}
+
+/// Every check's channel ids, for listing all checks at once.
+pub async fn check_links(db: &PgPool, org: OrgId) -> sqlx::Result<HashMap<Uuid, Vec<Uuid>>> {
+    let rows = sqlx::query!(
+        "SELECT check_id, channel_id FROM check_channels WHERE org_id = $1",
+        org.get()
+    )
+    .fetch_all(db)
+    .await?;
+    let mut map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    for r in rows {
+        map.entry(r.check_id).or_default().push(r.channel_id);
+    }
+    Ok(map)
+}
+
+/// Every monitor's channel ids.
+pub async fn monitor_links(db: &PgPool, org: OrgId) -> sqlx::Result<HashMap<Uuid, Vec<Uuid>>> {
+    let rows = sqlx::query!(
+        "SELECT monitor_id, channel_id FROM monitor_channels WHERE org_id = $1",
+        org.get()
+    )
+    .fetch_all(db)
+    .await?;
+    let mut map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    for r in rows {
+        map.entry(r.monitor_id).or_default().push(r.channel_id);
+    }
+    Ok(map)
 }
 
 pub async fn ids_for_check(db: &PgPool, org: OrgId, check_id: Uuid) -> sqlx::Result<Vec<Uuid>> {

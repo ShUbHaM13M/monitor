@@ -10,10 +10,12 @@ ENV SQLX_OFFLINE=true CARGO_TERM_COLOR=never
 # Dependencies first, against stub sources, so they're only rebuilt when
 # Cargo.toml/Cargo.lock change. The registry and target dir are cache mounts.
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo 'fn main() {}' > src/main.rs && touch src/lib.rs
+COPY cli/Cargo.toml cli/
+RUN mkdir -p src cli/src && echo 'fn main() {}' > src/main.rs && touch src/lib.rs \
+    && echo 'fn main() {}' > cli/src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked && rm -rf src
+    cargo build --release --locked -p monitor && rm -rf src cli/src
 
 COPY . .
 # COPY keeps the files' original mtimes, which can be older than the stub build;
@@ -21,7 +23,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     touch src/main.rs src/lib.rs \
-    && cargo build --release --locked \
+    && cargo build --release --locked -p monitor \
     && cp target/release/monitor /monitor
 
 # ── Run ──

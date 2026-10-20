@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.duration_ms::bigint AS \"ms!\"\n           FROM pings p\n           JOIN checks c ON c.id = p.check_id\n           WHERE p.check_id = $1 AND c.org_id = $2 AND p.duration_ms IS NOT NULL\n             AND (p.kind = 'success' OR (p.kind = 'exit' AND p.exit_code = 0))\n           ORDER BY p.created_at DESC\n           LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ms!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "df2139b565194614308d4154492e06e03db3dc7c7d1e8161a27c65281cd59431"
+}

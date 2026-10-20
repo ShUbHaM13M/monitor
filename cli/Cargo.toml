@@ -1,0 +1,12 @@
+[package]
+name = "monitor-run"
+version = "0.1.0"
+edition = "2024"
+description = "Run a job and report its start, exit code, duration and output to Monitor"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive", "env"] }
+ureq = { version = "3.4", default-features = false, features = ["rustls"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -28,7 +28,7 @@ const MAX_BODY: usize = 10_000;
 const RECENT_RESULTS: i64 = 50;
 const RECENT_INCIDENTS: i64 = 20;
 
-fn percent(uptime: Option<f64>) -> String {
+pub(super) fn percent(uptime: Option<f64>) -> String {
     match uptime {
         // Never round a failure up to a perfect score.
         Some(u) if (0.9999..1.0).contains(&u) => "99.99%".to_owned(),
@@ -168,18 +168,18 @@ pub async fn table(
 #[derive(Deserialize, Default)]
 #[serde(default)]
 pub struct MonitorInput {
-    name: String,
-    url: String,
-    method: String,
-    interval_secs: String,
-    timeout_secs: String,
-    expected_status: String,
-    body_contains: String,
-    max_latency_ms: String,
-    fail_threshold: String,
-    headers: String,
-    body: String,
-    channel_ids: Vec<String>,
+    pub(super) name: String,
+    pub(super) url: String,
+    pub(super) method: String,
+    pub(super) interval_secs: String,
+    pub(super) timeout_secs: String,
+    pub(super) expected_status: String,
+    pub(super) body_contains: String,
+    pub(super) max_latency_ms: String,
+    pub(super) fail_threshold: String,
+    pub(super) headers: String,
+    pub(super) body: String,
+    pub(super) channel_ids: Vec<String>,
 }
 
 struct FormView {
@@ -424,7 +424,7 @@ fn optional_number(
     }
 }
 
-fn parse_spec(
+pub(super) fn parse_spec(
     state: &AppState,
     input: &MonitorInput,
     min_interval: i32,

@@ -43,6 +43,31 @@ pub struct Resolved {
     pub started_at: DateTime<Utc>,
 }
 
+/// Records a one-off event (an unusual run time) as an incident that is
+/// already resolved, so it shows in the history without affecting status.
+pub async fn record_instant_for_check(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    check_id: Uuid,
+    reason: &str,
+    detail: &str,
+    cause_ping_id: i64,
+) -> sqlx::Result<Uuid> {
+    sqlx::query_scalar!(
+        "INSERT INTO incidents (id, org_id, check_id, reason, detail, cause_ping_id, started_at, resolved_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now(), now())
+         RETURNING id",
+        Uuid::now_v7(),
+        org_id,
+        check_id,
+        reason,
+        detail,
+        cause_ping_id,
+    )
+    .fetch_one(conn)
+    .await
+}
+
 /// Resolves the check's open incident, if any.
 pub async fn resolve_for_check(
     conn: &mut PgConnection,

@@ -91,6 +91,8 @@ pub struct Limits {
     pub signup: RateLimiter<IpAddr>,
     /// Password reset, email and channel confirmation.
     pub account: RateLimiter<IpAddr>,
+    /// REST API requests per key.
+    pub api: RateLimiter<uuid::Uuid>,
 }
 
 impl Default for Limits {
@@ -102,6 +104,7 @@ impl Default for Limits {
             login: RateLimiter::new(Quota::new(10, secs(6))),
             signup: RateLimiter::new(Quota::new(5, secs(120))),
             account: RateLimiter::new(Quota::new(10, secs(30))),
+            api: RateLimiter::new(Quota::new(120, Duration::from_millis(100))),
         }
     }
 }

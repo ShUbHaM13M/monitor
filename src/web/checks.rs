@@ -17,6 +17,7 @@ use crate::db::checks::{self, Check, CheckKind, CheckSpec, CheckStatus, Signatur
 use crate::db::incidents::{self, Incident};
 use crate::db::pings::{self, Ping};
 use crate::db::{channels, orgs};
+use crate::domain::anomaly;
 use crate::domain::schedule::Schedule;
 use crate::domain::signature::Scheme;
 use crate::domain::time::{duration, span};
@@ -152,24 +153,26 @@ async fn list_body(
 #[derive(Deserialize, Default)]
 #[serde(default)]
 pub struct CheckInput {
-    name: String,
-    schedule_kind: String,
-    period_value: String,
-    period_unit: String,
-    cron_expr: String,
-    tz: String,
-    grace_value: String,
-    grace_unit: String,
-    max_runtime_minutes: String,
+    pub(super) name: String,
+    pub(super) schedule_kind: String,
+    pub(super) period_value: String,
+    pub(super) period_unit: String,
+    pub(super) cron_expr: String,
+    pub(super) tz: String,
+    pub(super) grace_value: String,
+    pub(super) grace_unit: String,
+    pub(super) max_runtime_minutes: String,
     /// Repeated key, one per ticked checkbox (hence `axum_extra`'s `Form`/`Query`).
-    channel_ids: Vec<String>,
+    pub(super) channel_ids: Vec<String>,
     /// "heartbeat" or "webhook"; only read on create.
-    kind: String,
+    pub(super) kind: String,
     /// Webhook monitors: "" (none) or a `Scheme` id.
-    signature_scheme: String,
-    signature_header: String,
+    pub(super) signature_scheme: String,
+    pub(super) signature_header: String,
     /// Never rendered back; blank on edit keeps the stored secret.
-    signing_secret: String,
+    pub(super) signing_secret: String,
+    /// "on" when ticked; absent (empty) when not.
+    pub(super) duration_alerts: String,
 }
 
 struct FormView {
@@ -238,6 +241,7 @@ impl FormView {
                 grace_value: "1".into(),
                 grace_unit: "hours".into(),
                 kind: "heartbeat".into(),
+                duration_alerts: "on".into(),
                 ..Default::default()
             },
             channels,
@@ -275,6 +279,7 @@ impl FormView {
                 signature_scheme: check.signature_scheme.clone().unwrap_or_default(),
                 signature_header: check.signature_header.clone().unwrap_or_default(),
                 signing_secret: String::new(),
+                duration_alerts: if check.duration_alerts { "on" } else { "" }.into(),
             },
             channels,
             error: None,
@@ -478,7 +483,7 @@ pub async fn preview(
 
 /// `existing` is the check being edited (its kind is fixed, and its stored secret
 /// may be kept).
-fn parse_spec(
+pub(super) fn parse_spec(
     input: &CheckInput,
     existing: Option<&Check>,
     secrets: &SecretBox,
@@ -526,6 +531,7 @@ fn parse_spec(
         max_runtime_secs: max_runtime_secs
             .filter(|_| kind == CheckKind::Heartbeat)
             .map(|s| s as i32),
+        duration_alerts: kind == CheckKind::Heartbeat && !input.duration_alerts.is_empty(),
         channel_ids: selected_ids(input),
     })
 }
@@ -590,6 +596,8 @@ fn parse_schedule(input: &CheckInput) -> Result<Schedule, String> {
 fn amount(value: &str, unit: &str) -> Option<i64> {
     let n: i64 = value.trim().parse().ok().filter(|n| *n >= 0)?;
     let unit_secs = match unit {
+        // Only the API sends seconds; the form offers minutes and up.
+        "seconds" => 1,
         "minutes" => 60,
         "hours" => 3600,
         "days" => 86_400,
@@ -670,6 +678,8 @@ pub(super) fn reason_label(reason: &str) -> &'static str {
         "hung" => "Run never finished",
         "http_down" => "Not responding as expected",
         "http_slow" => "Responding too slowly",
+        "slow_run" => "Ran unusually long",
+        "fast_run" => "Finished unusually fast",
         _ => "Down",
     }
 }
@@ -686,6 +696,8 @@ impl IncidentRow {
     pub(super) fn new(incident: Incident) -> Self {
         let reason = reason_label(&incident.reason);
         let resolution = match incident.resolved_at {
+            // A one-off event (an unusual run time), not an outage.
+            Some(end) if end == incident.started_at => "single run".to_owned(),
             Some(end) => format!(
                 "resolved after {}",
                 duration((end - incident.started_at).num_milliseconds())
@@ -705,6 +717,8 @@ impl IncidentRow {
 struct Activity {
     id: Uuid,
     is_webhook: bool,
+    /// "about 4m 05s (median of 20 runs)", once runs are being timed.
+    typical_run: Option<String>,
     status: CheckStatus,
     last_ping: Stamp,
     next_due: Stamp,
@@ -840,9 +854,25 @@ async fn activity(
     let pings = pings::recent(&state.db, user.org, check.id, RECENT_PINGS).await?;
     let incidents =
         incidents::recent_for_check(&state.db, user.org, check.id, RECENT_INCIDENTS).await?;
+    let runs = pings::recent_run_durations(&state.db, user.org, check.id, anomaly::HISTORY).await?;
+    let typical_run = match anomaly::median(&runs) {
+        _ if check.is_webhook() => None,
+        Some(median) if runs.len() >= anomaly::MIN_SAMPLES => Some(format!(
+            "about {} (median of {} runs)",
+            duration(median),
+            runs.len()
+        )),
+        Some(_) => Some(format!(
+            "learning: {} of {} runs timed",
+            runs.len(),
+            anomaly::MIN_SAMPLES
+        )),
+        None => None,
+    };
     Ok(Activity {
         id: check.id,
         is_webhook: check.is_webhook(),
+        typical_run,
         status: check.status,
         last_ping: Stamp::relative_or(check.last_ping_at, now, "never"),
         next_due: next_due(check, now),
@@ -1000,7 +1030,7 @@ mod tests {
             ("name", |f| f.name = "  ".into()),
             ("period", |f| f.period_value = "abc".into()),
             ("period", |f| f.period_value = "-1".into()),
-            ("whole number", |f| f.period_unit = "seconds".into()),
+            ("whole number", |f| f.period_unit = "weeks".into()),
             ("Grace", |f| f.grace_value = "31".into()),
             ("Max run time", |f| f.max_runtime_minutes = "0".into()),
             ("schedule type", |f| f.schedule_kind = "sometimes".into()),

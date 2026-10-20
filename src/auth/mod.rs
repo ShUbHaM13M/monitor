@@ -1,3 +1,4 @@
+pub mod api_key;
 pub mod csrf;
 mod extract;
 pub mod password;

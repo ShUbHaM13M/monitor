@@ -8,8 +8,10 @@ use uuid::Uuid;
 use super::checks::{CheckStatus, deadlines};
 use super::{incidents, notifications};
 use crate::auth::OrgId;
+use crate::domain::anomaly;
 use crate::domain::ping::{Outcome, Signal};
 use crate::domain::schedule::Schedule;
+use crate::domain::time::duration;
 use crate::notify::alert::log_tail;
 use crate::notify::{Alert, AlertEvent};
 
@@ -42,6 +44,29 @@ pub async fn recent(
            JOIN checks c ON c.id = p.check_id
            WHERE p.check_id = $1 AND c.org_id = $2
            ORDER BY p.created_at DESC, p.id DESC
+           LIMIT $3"#,
+        check_id,
+        org.get(),
+        limit,
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// Durations (ms) of the check's latest successful timed runs, newest first.
+pub async fn recent_run_durations(
+    db: &PgPool,
+    org: OrgId,
+    check_id: Uuid,
+    limit: i64,
+) -> sqlx::Result<Vec<i64>> {
+    sqlx::query_scalar!(
+        r#"SELECT p.duration_ms::bigint AS "ms!"
+           FROM pings p
+           JOIN checks c ON c.id = p.check_id
+           WHERE p.check_id = $1 AND c.org_id = $2 AND p.duration_ms IS NOT NULL
+             AND (p.kind = 'success' OR (p.kind = 'exit' AND p.exit_code = 0))
+           ORDER BY p.created_at DESC
            LIMIT $3"#,
         check_id,
         org.get(),
@@ -142,7 +167,7 @@ pub async fn record(
     let check = sqlx::query!(
         r#"SELECT id, org_id, name, status AS "status: CheckStatus", schedule_kind, cron_expr, tz,
                   period_secs, grace_secs, max_runtime_secs, last_start_at, alert_after,
-                  now() AS "now!"
+                  duration_alerts, now() AS "now!"
            FROM checks WHERE token = $1 AND kind = $2 FOR UPDATE"#,
         token,
         endpoint.check_kind(),
@@ -237,6 +262,44 @@ pub async fn record(
                     alert.occurred_at = now;
                     alert.down_since = Some(resolved.started_at);
                     notifications::enqueue_recovery(&mut tx, resolved.id, &alert).await?;
+                }
+                if let (true, Some(took)) = (check.duration_alerts, duration_ms) {
+                    let history = sqlx::query_scalar!(
+                        r#"SELECT duration_ms::bigint AS "ms!" FROM pings
+                           WHERE check_id = $1 AND id <> $2 AND duration_ms IS NOT NULL
+                             AND (kind = 'success' OR (kind = 'exit' AND exit_code = 0))
+                           ORDER BY created_at DESC
+                           LIMIT $3"#,
+                        check.id,
+                        ping_id,
+                        anomaly::HISTORY,
+                    )
+                    .fetch_all(&mut *tx)
+                    .await?;
+                    if let Some(found) = anomaly::judge(&history, took.into()) {
+                        let detail = format!(
+                            "This run took {}; it usually takes about {} (median of the last {} runs).",
+                            duration(took.into()),
+                            duration(found.median_ms()),
+                            history.len(),
+                        );
+                        let incident = incidents::record_instant_for_check(
+                            &mut tx,
+                            check.org_id,
+                            check.id,
+                            found.reason(),
+                            &detail,
+                            ping_id,
+                        )
+                        .await?;
+                        let mut alert =
+                            Alert::for_check(AlertEvent::Anomaly, check.id, &check.name, base_url);
+                        alert.occurred_at = now;
+                        alert.reason = Some(found.label().into());
+                        alert.detail = Some(detail);
+                        notifications::enqueue_for_check(&mut tx, incident, check.id, &alert)
+                            .await?;
+                    }
                 }
             } else {
                 let detail = match signal {

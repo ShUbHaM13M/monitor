@@ -5,6 +5,7 @@
     <div><span class="muted">Status</span><span class="pill {{ activity.status.css() }}">{{ activity.status.label() }}</span></div>
     <div><span class="muted">{% if activity.is_webhook %}Last delivery{% else %}Last ping{% endif %}</span>{{ activity.last_ping|safe }}</div>
     <div><span class="muted">Next due</span>{{ activity.next_due|safe }}</div>
+    {% if let Some(typical) = activity.typical_run %}<div><span class="muted">Typical run</span>{{ typical }}</div>{% endif %}
   </section>
 
   {% if !activity.incidents.is_empty() %}

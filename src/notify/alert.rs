@@ -19,6 +19,8 @@ pub enum AlertEvent {
     Fail,
     /// Recovered.
     Up,
+    /// A run took far longer, or far less time, than usual. The check is still up.
+    Anomaly,
 }
 
 impl AlertEvent {
@@ -28,6 +30,7 @@ impl AlertEvent {
             Self::Down => "down",
             Self::Fail => "fail",
             Self::Up => "up",
+            Self::Anomaly => "anomaly",
         }
     }
 }
@@ -153,6 +156,7 @@ impl Alert {
             AlertEvent::Down => format!("🚨 {} is down", self.source.name),
             AlertEvent::Fail => format!("❌ {} failed", self.source.name),
             AlertEvent::Up => format!("✅ {} is back up", self.source.name),
+            AlertEvent::Anomaly => format!("⚠️ {}: unusual run time", self.source.name),
         }
     }
 

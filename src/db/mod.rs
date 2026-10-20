@@ -1,3 +1,4 @@
+pub mod api_keys;
 pub mod channels;
 pub mod checks;
 pub mod incidents;

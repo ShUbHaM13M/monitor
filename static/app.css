@@ -388,3 +388,9 @@ a.small { font-size: 0.85rem; font-weight: 400; }
   color: var(--muted); font: 0.8rem/1.4 system-ui, sans-serif; cursor: pointer;
 }
 .copy:hover { color: var(--text); border-color: var(--muted); }
+
+/* ───────── API keys ───────── */
+
+.new-key { border-color: var(--up); }
+.new-key h2 { color: var(--up); }
+.new-key .snippet { background: var(--surface); color: var(--text); }

@@ -62,6 +62,8 @@ pub struct Check {
     pub signature_header: Option<String>,
     /// Whether a signing secret is stored (it's never read back out for display).
     pub has_secret: bool,
+    /// Alert on unusually long or short runs.
+    pub duration_alerts: bool,
 }
 
 impl Check {
@@ -115,6 +117,7 @@ pub struct CheckSpec {
     pub schedule: Schedule,
     pub grace_secs: i32,
     pub max_runtime_secs: Option<i32>,
+    pub duration_alerts: bool,
     /// Channels that get this check's alerts.
     pub channel_ids: Vec<Uuid>,
 }
@@ -168,7 +171,7 @@ pub async fn list(db: &PgPool, org: OrgId) -> sqlx::Result<Vec<Check>> {
         r#"SELECT id, kind, name, token, schedule_kind, cron_expr, tz, period_secs, grace_secs,
                   max_runtime_secs, status AS "status: CheckStatus", last_ping_at,
                   last_start_at, next_expected_at, alert_after, created_at, signature_scheme,
-                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!"
+                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!", duration_alerts
            FROM checks
            WHERE org_id = $1
            ORDER BY created_at"#,
@@ -184,7 +187,7 @@ pub async fn get(db: &PgPool, org: OrgId, id: Uuid) -> sqlx::Result<Option<Check
         r#"SELECT id, kind, name, token, schedule_kind, cron_expr, tz, period_secs, grace_secs,
                   max_runtime_secs, status AS "status: CheckStatus", last_ping_at,
                   last_start_at, next_expected_at, alert_after, created_at, signature_scheme,
-                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!"
+                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!", duration_alerts
            FROM checks
            WHERE id = $1 AND org_id = $2"#,
         id,
@@ -207,8 +210,9 @@ pub async fn create(
     let id = sqlx::query_scalar!(
         "INSERT INTO checks (id, org_id, project_id, kind, name, token, schedule_kind,
                              cron_expr, tz, period_secs, grace_secs, max_runtime_secs,
-                             signature_scheme, signature_header, signing_secret_enc)
-         SELECT $1, $2, p.id, $11, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14
+                             signature_scheme, signature_header, signing_secret_enc,
+                             duration_alerts)
+         SELECT $1, $2, p.id, $11, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15
          FROM projects p
          WHERE p.org_id = $2
          ORDER BY p.created_at
@@ -228,6 +232,7 @@ pub async fn create(
         spec.signature.as_ref().map(|s| s.scheme),
         spec.signature.as_ref().and_then(|s| s.header.clone()),
         spec.signature.as_ref().and_then(|s| s.secret_enc.clone()),
+        spec.duration_alerts,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -264,7 +269,7 @@ pub async fn update(db: &PgPool, org: OrgId, id: Uuid, spec: &CheckSpec) -> sqlx
              signature_scheme = $12, signature_header = $13,
              signing_secret_enc = CASE WHEN $12::text IS NULL THEN NULL
                                        ELSE COALESCE($14, signing_secret_enc) END,
-             updated_at = now()
+             duration_alerts = $15, updated_at = now()
          WHERE id = $1 AND org_id = $2",
         id,
         org.get(),
@@ -280,6 +285,7 @@ pub async fn update(db: &PgPool, org: OrgId, id: Uuid, spec: &CheckSpec) -> sqlx
         spec.signature.as_ref().map(|s| s.scheme),
         spec.signature.as_ref().and_then(|s| s.header.clone()),
         spec.signature.as_ref().and_then(|s| s.secret_enc.clone()),
+        spec.duration_alerts,
     )
     .execute(&mut *tx)
     .await?;

@@ -57,7 +57,7 @@ impl ChannelRow {
 }
 
 /// The kind's safe summary of the stored config.
-fn summary(state: &AppState, channel: &Channel) -> String {
+pub(super) fn summary(state: &AppState, channel: &Channel) -> String {
     match (
         state.channels.get(&channel.kind),
         open_config(state, &channel.config_enc),

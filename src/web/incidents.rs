@@ -56,7 +56,12 @@ impl IncidentItem {
             reason: reason_label(&i.reason),
             detail: i.detail.unwrap_or_default(),
             started: Stamp::relative(i.started_at, now),
-            duration: duration((end - i.started_at).num_milliseconds().max(0)),
+            // One-off events (unusual run times) open and close at once.
+            duration: if i.resolved_at == Some(i.started_at) {
+                "—".to_owned()
+            } else {
+                duration((end - i.started_at).num_milliseconds().max(0))
+            },
         }
     }
 }

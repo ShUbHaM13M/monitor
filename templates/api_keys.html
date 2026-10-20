@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+
+{% block title %}API keys · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>API keys</h1>
+</div>
+<p class="muted">
+  Keys let scripts and tools such as Terraform or CI manage this organisation through the
+  REST API at <code>{{ base_url }}/api/v1</code>. Send one as
+  <code>Authorization: Bearer mon_…</code>.
+</p>
+
+{% if let Some(token) = created %}
+<section class="card notice-ok new-key" role="status">
+  <h2>Your new key</h2>
+  <p>Copy it now: it won't be shown again. If you lose it, delete it and create another.</p>
+  <pre class="snippet"><code>{{ token }}</code></pre>
+  <p class="muted">Try it:</p>
+  <pre class="snippet"><code>curl -H "Authorization: Bearer {{ token }}" {{ base_url }}/api/v1/checks</code></pre>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Create a key</h2>
+  <form method="post" action="/api-keys" class="form narrow">
+    <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+    {% if let Some(e) = error %}<p class="form-error" role="alert">{{ e }}</p>{% endif %}
+    <label>Name
+      <input type="text" name="name" value="{{ input.name }}" maxlength="100" placeholder="Terraform" required>
+    </label>
+    <fieldset class="choice stacked">
+      <legend>Access</legend>
+      <label class="radio"><input type="radio" name="scope" value="read" {% if input.scope != "write" %}checked{% endif %}>
+        <span>Read only <span class="muted">— list and inspect checks, monitors, channels and incidents</span></span></label>
+      <label class="radio"><input type="radio" name="scope" value="write" {% if input.scope == "write" %}checked{% endif %}>
+        <span>Read and write <span class="muted">— also create, change, pause and delete checks and monitors</span></span></label>
+    </fieldset>
+    <label>Expires
+      <select name="expires">
+        {% for (value, label) in expiries %}
+        <option value="{{ value }}" {% if input.expires == **value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div><button type="submit" class="button">Create key</button></div>
+  </form>
+</section>
+
+{% if !keys.is_empty() %}
+<table class="table">
+  <thead><tr><th>Name</th><th>Key</th><th>Access</th><th>Created</th><th>Last used</th><th>Expires</th><th></th></tr></thead>
+  <tbody>
+    {% for k in keys %}
+    <tr>
+      <td>{{ k.name }}</td>
+      <td class="mono">{{ k.prefix }}…</td>
+      <td>{% if k.write %}read &amp; write{% else %}read only{% endif %}</td>
+      <td>{{ k.created|safe }}</td>
+      <td>{{ k.last_used|safe }}</td>
+      <td>{% if k.expired %}<span class="pill pill-down">expired</span>{% else %}{{ k.expires|safe }}{% endif %}</td>
+      <td>
+        <form method="post" action="/api-keys/{{ k.id }}/delete" class="inline"
+              hx-post="/api-keys/{{ k.id }}/delete" hx-confirm="Delete “{{ k.name }}”? Anything using it stops working immediately.">
+          <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+          <button type="submit" class="button danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -1,6 +1,7 @@
 # Monitor
 
-Cron / heartbeat, webhook and HTTP uptime monitoring with email and webhook alerts.
+Cron / heartbeat, webhook and HTTP uptime monitoring with email, Slack, Discord and webhook
+alerts, a REST API, and a `monitor-run` job wrapper.
 Rust (axum + sqlx + askama) with server-rendered pages and htmx, backed by PostgreSQL.
 
 ## Development
@@ -105,12 +106,13 @@ src/
   auth/       passwords, sessions, CSRF, CurrentUser/OrgId extractors
   config.rs   CLI / env configuration
   db/         pool, migrations, queries (tenant data always scoped by OrgId)
-  domain/     pure logic: schedules (cron + tz), ping signals, time formatting
-  web/        router, handlers, ping ingest (/p/{token}), error type, static assets
+  domain/     pure logic: schedules (cron + tz), ping signals, run-time anomalies, time formatting
+  web/        router, handlers, ping ingest (/p/{token}), REST API (web/api), static assets
   notify/     alert channels: the ChannelKind trait, registry, built-in kinds, SSRF-safe HTTP
   crypto.rs   encryption at rest for channel configs
   worker/     background loops: deadline scheduler, HTTP prober, rollups, alert notifier, cleanup
               (work is claimed with FOR UPDATE SKIP LOCKED, so workers can scale out)
+cli/          monitor-run, the job wrapper (its own small crate in the workspace)
 ```
 
 ## Dashboard
@@ -185,6 +187,87 @@ Each channel's page shows its delivery history.
 - Alerts only go to confirmed channels. An email channel needs a confirmation link
   unless it's addressed to your own, already confirmed, account email.
 - A recovery goes only to the channels that were told about that outage.
+
+Built-in channels: **Email** (needs `SMTP_URL`), **Slack** and **Discord** (incoming-webhook
+URLs, treated as secrets and checked to point at Slack or Discord), and a signed **Webhook**.
+
+### Unusual run times
+
+A check whose job pings `/start` gets its runs timed. Once it has 8 timed successful runs,
+each new run is compared with the median of the last 20. The check stays up either way, but
+an *anomaly* alert goes out when:
+- a run takes at least twice the median, at least a minute longer, and longer than any recent
+  run;
+- a run that usually takes at least a minute finishes in under a fifth of the median, and
+  faster than any recent run. A backup that "succeeds" in 3 seconds probably did nothing.
+
+Each anomaly is recorded as a single-run incident. The check page shows the typical run time,
+and the check form can switch these alerts off.
+
+## Running jobs with `monitor-run`
+
+`cli/` builds `monitor-run`, a small wrapper for cron jobs:
+
+```sh
+cargo build --release -p monitor-run      # target/release/monitor-run
+monitor-run --url https://monitor.example.com/p/<token> -- /usr/local/bin/backup.sh --full
+```
+
+It pings `/start`, runs the command with its output passed through as usual, and then reports
+the exit code with the last 10 KB of output. Options:
+- `--timeout SECONDS` kills the job's whole process group and reports exit code 124.
+- `--no-start` skips the `/start` ping.
+- `--tail BYTES` changes how much output is sent.
+- `--quiet` silences warnings.
+- `MONITOR_URL` can be used instead of `--url`.
+
+SIGTERM, SIGHUP and SIGINT are passed on to the job, so stopping the wrapper still reports how
+the job ended. If Monitor is unreachable the job runs anyway (each report is retried 3 times),
+and `monitor-run` always exits with the job's own exit code.
+
+## REST API
+
+Create a key under **API** in the dashboard. It is shown once, stored hashed, and is either
+read-only or read-write, with an optional expiry. Send it as `Authorization: Bearer mon_…`.
+Requests are limited to bursts of 120, then 10 per second, per key.
+
+| Method | Path | |
+|---|---|---|
+| `GET`, `POST` | `/api/v1/checks` | list; create |
+| `GET`, `PUT`, `DELETE` | `/api/v1/checks/{id}` | read; replace; delete |
+| `POST` | `/api/v1/checks/{id}/pause`, `/resume` | |
+| `GET` | `/api/v1/checks/{id}/pings?limit=50` | newest first |
+| `GET`, `POST` | `/api/v1/monitors` | list; create |
+| `GET`, `PUT`, `DELETE` | `/api/v1/monitors/{id}` | |
+| `POST` | `/api/v1/monitors/{id}/pause`, `/resume` | |
+| `GET` | `/api/v1/monitors/{id}/results?limit=50` | |
+| `GET` | `/api/v1/channels` | ids to use in `channels` (channels are added in the dashboard) |
+| `GET` | `/api/v1/incidents?state=open\|resolved&limit=50` | page with `before` + `before_id` |
+
+```sh
+curl -X POST https://monitor.example.com/api/v1/checks \
+  -H "Authorization: Bearer $MONITOR_KEY" -H "Content-Type: application/json" \
+  -d '{"name": "Nightly backup", "schedule": {"cron": "0 2 * * *", "tz": "Europe/Berlin"}, "grace": 1800}'
+```
+
+How request bodies work:
+- **Units.** Durations are in seconds.
+- **Schedule.** `schedule` is either `{"every": 3600}` or `{"cron": "…", "tz": "…"}`.
+- **Check kinds.** A webhook check takes `"kind": "webhook"` plus
+  `"signature": {"scheme": "stripe", "secret": "…"}`.
+- **Monitors.** Monitors take `url`, `method`, `interval` (30, 60, 300, 900, 1800 or 3600),
+  `timeout`, `expected_status`, `body_contains`, `max_latency_ms`, `fail_threshold`, `headers`
+  (an object) and `body`.
+- **Validation.** Bodies go through the same validation as the dashboard forms, and unknown
+  fields are rejected.
+- **`PUT`.** It replaces the whole definition, except that omitted `channels`, monitor
+  `headers` and webhook `secret` are kept as they are.
+
+What comes back:
+- **Secrets.** Header values and signing secrets are never returned.
+- **Errors.** They look like `{"error": {"code": "invalid", "message": "…"}}`, with code
+  `unauthorized` (401), `read_only_key` (403), `plan_limit` (403), `not_found` (404),
+  `invalid` (422) or `rate_limited` (429).
 
 ### Adding a channel
 

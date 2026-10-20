@@ -89,6 +89,12 @@
     <small class="muted">If the job pings <code>/start</code>, it goes down when it hasn't finished within this time.</small>
   </label>
 
+  <label class="radio heartbeat-only">
+    <input type="checkbox" name="duration_alerts" {% if !form.input.duration_alerts.is_empty() %}checked{% endif %}>
+    <span>Alert when a run takes far longer or shorter than usual
+      <small class="muted">(learned from the last 20 runs that ping <code>/start</code>)</small></span>
+  </label>
+
   <fieldset class="choice stacked webhook-only">
     <legend>Signature verification</legend>
     <label><span>Signed by <span class="muted">(recommended: forged requests are rejected)</span></span>

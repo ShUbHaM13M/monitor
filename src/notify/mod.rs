@@ -25,10 +25,17 @@ impl Registry {
         if let Some(mailer) = mailer {
             kinds.push(Arc::new(channels::email::Email::new(mailer)));
         }
-        kinds.push(Arc::new(channels::webhook::Webhook::new(
-            http::client(config.allow_private_targets),
-            config.allow_private_targets,
+        let client = http::client(config.allow_private_targets);
+        let private = config.allow_private_targets;
+        kinds.push(Arc::new(channels::slack::Slack::new(
+            client.clone(),
+            private,
         )));
+        kinds.push(Arc::new(channels::discord::Discord::new(
+            client.clone(),
+            private,
+        )));
+        kinds.push(Arc::new(channels::webhook::Webhook::new(client, private)));
         // New kinds go here, e.g.:
         // if let Some(twilio) = &config.twilio { kinds.push(Arc::new(channels::whatsapp::WhatsApp::new(twilio))); }
         Self { kinds }
