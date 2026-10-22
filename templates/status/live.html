@@ -1,0 +1,60 @@
+<div class="verdict {{ live.verdict_css() }}" role="status">
+  <strong>{{ live.verdict.label() }}</strong>
+  <span class="small-text">Updated {{ live.updated|safe }}</span>
+</div>
+
+{% if live.components.is_empty() %}
+<p class="card muted">Nothing is listed on this page yet.</p>
+{% else %}
+<section class="card components" aria-label="Components">
+  {% for c in live.components %}
+  <div class="component">
+    <div class="component-head">
+      <h2>{{ c.name }}</h2>
+      {% match c.current %}
+      {% when Current::Operational %}<span class="state state-good"><span aria-hidden="true">✓</span> {{ c.state_label }}</span>
+      {% when Current::Down %}<span class="state state-down"><span aria-hidden="true">✕</span> {{ c.state_label }}</span>
+      {% when Current::Unknown %}<span class="state state-none"><span aria-hidden="true">–</span> {{ c.state_label }}</span>
+      {% endmatch %}
+    </div>
+    <svg class="viz uptime-bars" viewBox="0 0 {{ live.width }} {{ height }}" preserveAspectRatio="none"
+         role="img" aria-label="{{ c.name }}: {{ c.uptime }} uptime over the last 90 days">
+      {% for cell in c.cells %}<rect x="{{ cell.x }}" y="0" width="6" height="{{ height }}" rx="1.5" class="{{ cell.css }}"><title>{{ cell.title }}</title></rect>{% endfor %}
+    </svg>
+    <div class="bars-axis small-text muted">
+      <span>90 days ago</span><span class="uptime-total">{{ c.uptime }} uptime</span><span>Today</span>
+    </div>
+    {% if !c.bad_days.is_empty() %}
+    <details class="small-text">
+      <summary>{{ c.bad_days.len() }} day{% if c.bad_days.len() != 1 %}s{% endif %} with downtime</summary>
+      <table class="table compact">
+        <thead><tr><th>Day (UTC)</th><th class="num">Downtime</th><th class="num">Uptime</th></tr></thead>
+        <tbody>
+          {% for (day, down, up) in c.bad_days %}<tr><td>{{ day }}</td><td class="num">{{ down }}</td><td class="num">{{ up }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <ul class="bars-legend small-text muted" aria-label="Legend">
+    {% for level in live.levels() %}<li><svg class="viz" width="10" height="10" aria-hidden="true"><rect width="10" height="10" rx="2" class="{{ level.css() }}"/></svg>{{ level.label() }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Past incidents</h2>
+  {% if live.incidents.is_empty() %}
+  <p class="muted">No incidents in the last 90 days.</p>
+  {% else %}
+  <ul class="incidents">
+    {% for i in live.incidents %}
+    <li class="{% if i.ongoing %}open{% endif %}">
+      <strong>{{ i.name }}</strong>: {{ i.what }}
+      <div class="muted small-text">{{ i.started|safe }} · {{ i.duration }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>

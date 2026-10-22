@@ -93,6 +93,8 @@ pub struct Limits {
     pub account: RateLimiter<IpAddr>,
     /// REST API requests per key.
     pub api: RateLimiter<uuid::Uuid>,
+    /// Public status pages per client.
+    pub public: RateLimiter<IpAddr>,
 }
 
 impl Default for Limits {
@@ -105,6 +107,7 @@ impl Default for Limits {
             signup: RateLimiter::new(Quota::new(5, secs(120))),
             account: RateLimiter::new(Quota::new(10, secs(30))),
             api: RateLimiter::new(Quota::new(120, Duration::from_millis(100))),
+            public: RateLimiter::new(Quota::new(60, Duration::from_millis(500))),
         }
     }
 }

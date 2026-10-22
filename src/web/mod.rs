@@ -14,8 +14,10 @@ mod ingest;
 mod monitors;
 mod overview;
 mod pages;
+mod public_status;
 pub mod ratelimit;
 mod stamp;
+mod status_pages;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -138,6 +140,17 @@ pub fn router(state: AppState) -> Router {
         .route("/monitors/{id}/delete", post(monitors::delete))
         .route("/api-keys", get(api_keys::list).post(api_keys::create))
         .route("/api-keys/{id}/delete", post(api_keys::delete))
+        .route(
+            "/status-pages",
+            get(status_pages::list).post(status_pages::create),
+        )
+        .route("/status-pages/new", get(status_pages::new_page))
+        .route("/status-pages/{id}", post(status_pages::update))
+        .route("/status-pages/{id}/edit", get(status_pages::edit_page))
+        .route("/status-pages/{id}/delete", post(status_pages::delete))
+        .route("/s/{slug}", get(public_status::page))
+        .route("/s/{slug}/live", get(public_status::live_partial))
+        .route("/s/{slug}/status.json", get(public_status::json))
         .route("/channels", get(channels::list))
         .route("/channels/new", get(channels::new_picker))
         .route(

@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT x.check_id, x.monitor_id, x.reason, x.started_at, x.resolved_at\n         FROM incidents x\n         JOIN status_page_items i\n           ON (i.check_id = x.check_id OR i.monitor_id = x.monitor_id) AND i.page_id = $1\n         WHERE x.reason NOT IN ('slow_run', 'fast_run')\n           AND (x.resolved_at IS NULL OR x.resolved_at > $2)\n         ORDER BY x.started_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "check_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "check_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "monitor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "monitor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "reason",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "reason"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "resolved_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "incidents",
+            "name": "resolved_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "aec1e82e437d6c6339f5188c8c3cab21593069d32cdcdef30bda65608a5ab2bd"
+}

@@ -24,8 +24,9 @@
         <a href="/monitors" data-nav="/monitors">Uptime</a>
         <a href="/incidents" data-nav="/incidents">Incidents</a>
         <a href="/channels" data-nav="/channels">Channels</a>
+        <a href="/status-pages" data-nav="/status-pages">Status pages</a>
         <a href="/api-keys" data-nav="/api-keys">API</a>
-        <span class="muted">{{ user.org_name }} · {{ user.email }}</span>
+        <span class="muted account" title="Signed in as {{ user.email }}">{{ user.org_name }}</span>
         <form method="post" action="/logout" class="inline">
           <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
           <button type="submit" class="link">Log out</button>

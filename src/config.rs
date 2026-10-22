@@ -72,6 +72,9 @@ pub struct PlanDefaults {
     #[arg(long, env = "PLAN_MAX_CHANNELS", default_value_t = 10)]
     pub max_channels: i32,
 
+    #[arg(long, env = "PLAN_MAX_STATUS_PAGES", default_value_t = 3)]
+    pub max_status_pages: i32,
+
     /// Shortest interval an HTTP monitor may use.
     #[arg(long, env = "PLAN_MIN_INTERVAL_SECS", default_value_t = 30)]
     pub min_interval_secs: i32,
@@ -83,6 +86,7 @@ impl Default for PlanDefaults {
             max_checks: 100,
             max_monitors: 20,
             max_channels: 10,
+            max_status_pages: 3,
             min_interval_secs: 30,
         }
     }

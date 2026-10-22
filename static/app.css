@@ -46,6 +46,8 @@ a { color: var(--accent); }
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
@@ -53,7 +55,8 @@ a { color: var(--accent); }
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 700; text-decoration: none; color: var(--text); }
-.topbar nav { display: flex; gap: 1rem; }
+.topbar nav { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+.topbar .account { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
 
@@ -394,3 +397,49 @@ a.small { font-size: 0.85rem; font-weight: 400; }
 .new-key { border-color: var(--up); }
 .new-key h2 { color: var(--up); }
 .new-key .snippet { background: var(--surface); color: var(--text); }
+
+/* ───────── status pages ───────── */
+
+/* Status palette (reserved meaning; always shown with a label or icon). */
+.viz {
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+}
+.day-good { fill: var(--status-good); }
+.day-minor { fill: var(--status-warning); }
+.day-partial { fill: var(--status-serious); }
+.day-major { fill: var(--status-critical); }
+.day-none { fill: var(--grid); }
+
+.narrow-page { max-width: 760px; }
+.status-head h1 { margin: 0 0 0.25rem; }
+.status-head p { margin: 0; }
+.status-foot { margin-top: 2rem; text-align: center; }
+.verdict-none { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--text); }
+
+.components { display: flex; flex-direction: column; gap: 1.5rem; }
+.component-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.5rem; }
+.component-head h2 { margin: 0; font-size: 1rem; }
+.state { font-size: 0.9rem; font-weight: 600; }
+.state span { display: inline-block; width: 1em; text-align: center; }
+.state-good span { color: var(--status-good, #0ca30c); }
+.state-down { color: var(--down); }
+.state-none { color: var(--muted); }
+
+.uptime-bars { display: block; width: 100%; height: 30px; }
+.uptime-bars rect:hover { opacity: 0.7; }
+.bars-axis { display: flex; justify-content: space-between; margin-top: 0.3rem; }
+.bars-axis .uptime-total { color: var(--text); font-weight: 600; }
+.bars-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; list-style: none; margin: 0; padding: 0; }
+.bars-legend li { display: inline-flex; align-items: center; gap: 0.35rem; }
+.table.compact th, .table.compact td { padding: 0.3rem 0.5rem; }
+.component details { margin-top: 0.4rem; }
+.status-form .prefixed { display: flex; align-items: center; gap: 0.25rem; }
+.status-form .prefixed input { flex: 1; }
+.components-picker { border: 0; padding: 0; margin: 0; }
+.components-picker legend { font-weight: 600; margin-bottom: 0.3rem; }
+.components-picker input[type="text"] { width: 100%; padding: 0.3rem 0.5rem; }
+.components-picker input.order { width: 4.5rem; padding: 0.3rem 0.5rem; text-align: right; }
+.form label.plain { display: inline; font-weight: 400; }

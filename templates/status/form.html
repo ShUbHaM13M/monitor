@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ heading }} · Monitor{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="/status-pages">← Status pages</a></p>
+<h1>{{ heading }}</h1>
+
+<form method="post" action="{{ form.action }}" class="card form status-form">
+  <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+  {% if let Some(e) = form.error %}<p class="form-error" role="alert">{{ e }}</p>{% endif %}
+
+  <label>Title
+    <input type="text" name="title" value="{{ form.title }}" maxlength="100" required>
+  </label>
+  <label><span>Address <span class="muted">(leave blank to use the title)</span></span>
+    <span class="prefixed"><span class="muted mono">{{ form.base_url }}/s/</span>
+      <input type="text" name="slug" value="{{ form.slug }}" maxlength="40" pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]" placeholder="acme" autocomplete="off"></span>
+  </label>
+  <label><span>Description <span class="muted">(optional, shown under the title)</span></span>
+    <textarea name="description" rows="2" maxlength="1000">{{ form.description }}</textarea>
+  </label>
+
+  <fieldset class="components-picker">
+    <legend>Components</legend>
+    <p class="muted small-text">
+      Tick what to show. Visitors see the public name, the current state and uptime, never
+      the internal name, URL or ping address. Lower order numbers come first.
+    </p>
+    {% if form.rows.is_empty() %}
+    <p class="muted">No checks or monitors yet. <a href="/checks/new">Create a check</a> or <a href="/monitors/new">a monitor</a> first.</p>
+    {% else %}
+    <table class="table compact">
+      <thead><tr><th>Show</th><th>Check or monitor</th><th>Public name</th><th class="num">Order</th></tr></thead>
+      <tbody>
+        {% for r in form.rows %}
+        <tr>
+          <td><input type="checkbox" name="show.{{ r.key }}" id="show-{{ r.key }}" {% if r.shown %}checked{% endif %}></td>
+          <td><label for="show-{{ r.key }}" class="plain">{{ r.internal_name }}</label><span class="tag">{{ r.kind }}</span></td>
+          <td><input type="text" name="name.{{ r.key }}" value="{{ r.display_name }}" maxlength="100" aria-label="Public name for {{ r.internal_name }}"></td>
+          <td class="num"><input type="number" name="pos.{{ r.key }}" value="{{ r.position }}" class="order" aria-label="Order for {{ r.internal_name }}"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </fieldset>
+
+  <label class="radio">
+    <input type="checkbox" name="published" {% if form.published %}checked{% endif %}>
+    <span>Public <span class="muted">— anyone with the address can see it. Unticked, only your organisation can (as a preview).</span></span>
+  </label>
+
+  <div><button type="submit" class="button">{{ form.submit }}</button></div>
+</form>
+{% endblock %}

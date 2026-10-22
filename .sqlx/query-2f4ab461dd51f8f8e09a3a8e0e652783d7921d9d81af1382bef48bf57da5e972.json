@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.check_id, i.monitor_id, i.display_name,\n                  COALESCE(c.status, m.status) AS \"status!\",\n                  COALESCE(c.created_at, m.created_at) AS \"since!\"\n           FROM status_page_items i\n           LEFT JOIN checks c ON c.id = i.check_id\n           LEFT JOIN http_monitors m ON m.id = i.monitor_id\n           WHERE i.page_id = $1\n           ORDER BY i.position, i.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "check_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "status_page_items",
+            "name": "check_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "monitor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "status_page_items",
+            "name": "monitor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "status_page_items",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "since!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2f4ab461dd51f8f8e09a3a8e0e652783d7921d9d81af1382bef48bf57da5e972"
+}

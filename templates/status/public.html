@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} status</title>
+  <meta name="description" content="Current status and uptime of {{ title }}.">
+  {% if draft %}<meta name="robots" content="noindex">{% endif %}
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/json" href="/s/{{ slug }}/status.json">
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body class="status-page">
+  {% if draft %}
+  <div class="banner" role="status">Draft preview: only your organisation can see this page until it's published.</div>
+  {% endif %}
+  <main class="container narrow-page">
+    <header class="status-head">
+      <h1>{{ title }}</h1>
+      {% if let Some(d) = description %}<p class="muted">{{ d }}</p>{% endif %}
+    </header>
+    <div id="status-live" hx-get="/s/{{ slug }}/live" hx-swap="innerHTML"
+         hx-trigger="every 60s, visibilitychange from:document" data-poll>
+      {% include "status/live.html" %}
+    </div>
+    <footer class="status-foot muted small-text">
+      Times in your timezone. <a href="/s/{{ slug }}/status.json">status.json</a> · Powered by Monitor
+    </footer>
+  </main>
+</body>
+</html>

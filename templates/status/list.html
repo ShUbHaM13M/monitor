@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+
+{% block title %}Status pages · Monitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Status pages</h1>
+  <a href="/status-pages/new" class="button">New status page</a>
+</div>
+
+{% if pages.is_empty() %}
+<section class="card empty">
+  <h2>No status pages yet</h2>
+  <p class="muted">
+    A public page your customers can check: current status, 90 days of uptime and past
+    incidents for the checks and monitors you choose, under names you choose.
+  </p>
+  <a href="/status-pages/new" class="button">Create a status page</a>
+</section>
+{% else %}
+<table class="table">
+  <thead><tr><th>Page</th><th>Address</th><th class="num">Components</th><th>State</th><th></th></tr></thead>
+  <tbody>
+    {% for p in pages %}
+    <tr>
+      <td><a href="/status-pages/{{ p.id }}/edit">{{ p.title }}</a></td>
+      <td class="mono"><a href="/s/{{ p.slug }}">{{ base_url }}/s/{{ p.slug }}</a></td>
+      <td class="num">{{ p.item_count }}</td>
+      <td>{% if p.published %}<span class="pill pill-up">public</span>{% else %}<span class="pill pill-muted">draft</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/status-pages/{{ p.id }}/delete" class="inline"
+              hx-post="/status-pages/{{ p.id }}/delete" hx-confirm="Delete this status page? Its address stops working.">
+          <input type="hidden" name="_csrf" value="{{ chrome.csrf }}">
+          <button type="submit" class="button danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

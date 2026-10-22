@@ -10,6 +10,7 @@ pub struct Limits {
     pub max_checks: i32,
     pub max_monitors: i32,
     pub max_channels: i32,
+    pub max_status_pages: i32,
     pub min_interval_secs: i32,
 }
 
@@ -19,6 +20,7 @@ pub async fn limits(db: &PgPool, org: OrgId, defaults: &PlanDefaults) -> sqlx::R
         r#"SELECT COALESCE(max_checks, $2) AS "max_checks!",
                   COALESCE(max_monitors, $3) AS "max_monitors!",
                   COALESCE(max_channels, $4) AS "max_channels!",
+                  COALESCE(max_status_pages, $6) AS "max_status_pages!",
                   COALESCE(min_monitor_interval_secs, $5) AS "min_interval_secs!"
            FROM orgs WHERE id = $1"#,
         org.get(),
@@ -26,6 +28,7 @@ pub async fn limits(db: &PgPool, org: OrgId, defaults: &PlanDefaults) -> sqlx::R
         defaults.max_monitors,
         defaults.max_channels,
         defaults.min_interval_secs,
+        defaults.max_status_pages,
     )
     .fetch_one(db)
     .await
@@ -36,6 +39,7 @@ pub enum Resource {
     Checks,
     Monitors,
     Channels,
+    StatusPages,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -70,6 +74,14 @@ pub async fn reserve(
         Resource::Monitors => {
             sqlx::query_scalar!(
                 r#"SELECT count(*) AS "n!" FROM http_monitors WHERE org_id = $1"#,
+                org.get()
+            )
+            .fetch_one(&mut *conn)
+            .await?
+        }
+        Resource::StatusPages => {
+            sqlx::query_scalar!(
+                r#"SELECT count(*) AS "n!" FROM status_pages WHERE org_id = $1"#,
                 org.get()
             )
             .fetch_one(&mut *conn)

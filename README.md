@@ -54,7 +54,7 @@ All settings are flags or environment variables; see `monitor --help` and `.env.
 | `ALLOW_PRIVATE_TARGETS` | Lets webhooks reach localhost/private IPs. Dev only: enabling it in production allows SSRF. |
 | `TRUSTED_PROXIES` | Comma-separated IPs/CIDRs of your reverse proxies. Only their `X-Forwarded-For` is believed, read from the right; unset means the TCP peer is the client. |
 | `METRICS_ADDR` | Serve Prometheus metrics at `/metrics` on this address. Keep it private; off when unset. |
-| `PLAN_MAX_CHECKS`, `PLAN_MAX_MONITORS`, `PLAN_MAX_CHANNELS`, `PLAN_MIN_INTERVAL_SECS` | Default plan limits (100, 20, 10, 30 s). Override one org with `UPDATE orgs SET max_checks = 500 WHERE …`. |
+| `PLAN_MAX_CHECKS`, `PLAN_MAX_MONITORS`, `PLAN_MAX_CHANNELS`, `PLAN_MAX_STATUS_PAGES`, `PLAN_MIN_INTERVAL_SECS` | Default plan limits (100, 20, 10, 3, 30 s). Override one org with `UPDATE orgs SET max_checks = 500 WHERE …`. |
 
 ## Deploying
 
@@ -203,6 +203,28 @@ an *anomaly* alert goes out when:
 
 Each anomaly is recorded as a single-run incident. The check page shows the typical run time,
 and the check form can switch these alerts off.
+
+## Status pages
+
+Under **Status pages**, an org can publish pages at `/s/{slug}` for its customers. You choose
+which checks and monitors to show, in what order, and under what public name. Visitors see:
+- **A verdict:** all operational, partial outage or major outage.
+- **Each component:** its state with an icon and label, and its uptime over the last 90 days,
+  drawn as one bar per UTC day (no downtime, under 1% down, 1–5% down, over 5% down, or no
+  data). Each bar's tooltip gives the figures, and the days with downtime are also listed
+  as text.
+- **Past incidents:** the last 10, in plain wording ("Didn't run on time", "Not
+  responding"), with times in the visitor's timezone.
+
+Uptime is calculated from outage incidents. A check that has never reported counts as no data,
+and unusual run times aren't outages.
+
+Internal names, URLs, ping addresses and incident details never appear. A draft (unticked
+"Public") returns 404 to everyone except members of the org, who get a preview.
+
+The page refreshes every minute. Published pages are cacheable for 30 seconds and are
+rate-limited per client. `/s/{slug}/status.json` gives the same information for other
+dashboards.
 
 ## Running jobs with `monitor-run`
 
