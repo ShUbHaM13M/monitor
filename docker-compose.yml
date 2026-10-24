@@ -18,6 +18,9 @@ services:
   # Local SMTP sink for email alerts. Web UI: http://localhost:8025
   mailpit:
     image: axllent/mailpit:latest
+    environment:
+      # Skip reverse DNS on each SMTP connection: when it stalls, so does every email.
+      MP_SMTP_DISABLE_RDNS: "true"
     ports:
       - "1025:1025"
       - "8025:8025"
