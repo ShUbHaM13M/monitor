@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE relay_deliveries\n         SET status = 'failed', finished_at = now(), last_error = 'Forwarding was turned off'\n         WHERE check_id = $1 AND status IN ('pending', 'sending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ad757c303653f2a359bd201d3f81fdbdd34eb91ed767763b6d16f4f2b1ef4ad7"
+}

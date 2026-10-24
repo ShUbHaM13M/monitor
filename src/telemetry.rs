@@ -111,6 +111,12 @@ async fn record_gauges(db: &PgPool) -> sqlx::Result<()> {
             .fetch_one(db)
             .await?;
     metrics::gauge!("incidents_open").set(open as f64);
+    let relay_queued: i64 = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!" FROM relay_deliveries WHERE status IN ('pending', 'sending')"#
+    )
+    .fetch_one(db)
+    .await?;
+    metrics::gauge!("relay_queued").set(relay_queued as f64);
     Ok(())
 }
 

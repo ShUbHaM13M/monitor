@@ -128,6 +128,14 @@ pub fn router(state: AppState) -> Router {
         .route("/checks/{id}/pause", post(checks::pause))
         .route("/checks/{id}/resume", post(checks::resume))
         .route("/checks/{id}/delete", post(checks::delete))
+        .route(
+            "/checks/{id}/relay/{delivery}/redeliver",
+            post(checks::redeliver),
+        )
+        .route(
+            "/checks/{id}/relay/{delivery}/skip",
+            post(checks::skip_delivery),
+        )
         .route("/monitors", get(monitors::list).post(monitors::create))
         .route("/monitors/table", get(monitors::table))
         .route("/monitors/new", get(monitors::new_page))

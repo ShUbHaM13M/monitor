@@ -94,6 +94,8 @@ enum Verdict {
     /// Nothing set up yet.
     Empty,
     Down(i64),
+    /// Everything's up, but webhooks can't be forwarded to the org's server.
+    RelayFailing(i64),
     /// Everything's up, but an alert might not reach anyone.
     AlertsAtRisk,
     AllGood,
@@ -128,7 +130,7 @@ impl Live {
         let names: Vec<&str> = self
             .open
             .iter()
-            .filter(|i| !i.paused)
+            .filter(|i| !i.paused && !i.relay)
             .map(|i| i.name.as_str())
             .collect();
         names.join(", ")
@@ -154,10 +156,11 @@ impl Live {
     }
 }
 
-fn verdict(down: i64, things: i64, channels_ok: bool) -> Verdict {
+fn verdict(down: i64, relays_failing: i64, things: i64, channels_ok: bool) -> Verdict {
     match () {
         _ if things == 0 => Verdict::Empty,
         _ if down > 0 => Verdict::Down(down),
+        _ if relays_failing > 0 => Verdict::RelayFailing(relays_failing),
         _ if !channels_ok => Verdict::AlertsAtRisk,
         _ => Verdict::AllGood,
     }
@@ -215,9 +218,11 @@ async fn live(state: &AppState, user: &CurrentUser) -> Result<Live, AppError> {
     .await?;
 
     let channels_ok = channels.total > channels.unverified && failing.is_empty();
+    let relays_failing = open.iter().filter(|i| i.reason == "relay_failing").count() as i64;
     Ok(Live {
         verdict: verdict(
             checks.down + monitors.down,
+            relays_failing,
             checks.total + monitors.total,
             channels_ok,
         ),
@@ -298,10 +303,11 @@ mod tests {
 
     #[test]
     fn verdict_puts_outages_first() {
-        assert_eq!(verdict(0, 0, false), Verdict::Empty);
-        assert_eq!(verdict(2, 5, false), Verdict::Down(2));
-        assert_eq!(verdict(0, 5, false), Verdict::AlertsAtRisk);
-        assert_eq!(verdict(0, 5, true), Verdict::AllGood);
+        assert_eq!(verdict(0, 0, 0, false), Verdict::Empty);
+        assert_eq!(verdict(2, 1, 5, false), Verdict::Down(2));
+        assert_eq!(verdict(0, 1, 5, false), Verdict::RelayFailing(1));
+        assert_eq!(verdict(0, 0, 5, false), Verdict::AlertsAtRisk);
+        assert_eq!(verdict(0, 0, 5, true), Verdict::AllGood);
     }
 
     #[test]

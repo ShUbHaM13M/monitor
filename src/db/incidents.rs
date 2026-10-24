@@ -25,7 +25,7 @@ pub async fn open_for_check(
     sqlx::query_scalar!(
         "INSERT INTO incidents (id, org_id, check_id, reason, detail, cause_ping_id)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (check_id) WHERE resolved_at IS NULL DO NOTHING
+         ON CONFLICT (check_id, (reason = 'relay_failing')) WHERE resolved_at IS NULL DO NOTHING
          RETURNING id",
         Uuid::now_v7(),
         org_id,
@@ -68,7 +68,8 @@ pub async fn record_instant_for_check(
     .await
 }
 
-/// Resolves the check's open incident, if any.
+/// Resolves the check's open outage incident, if any (not a failing relay;
+/// that has its own lifecycle).
 pub async fn resolve_for_check(
     conn: &mut PgConnection,
     check_id: Uuid,
@@ -76,7 +77,32 @@ pub async fn resolve_for_check(
     sqlx::query_as!(
         Resolved,
         "UPDATE incidents SET resolved_at = now()
-         WHERE check_id = $1 AND resolved_at IS NULL
+         WHERE check_id = $1 AND resolved_at IS NULL AND reason <> 'relay_failing'
+         RETURNING id, started_at",
+        check_id,
+    )
+    .fetch_optional(conn)
+    .await
+}
+
+/// Opens the "forwarding failing" incident for a relaying check, unless open.
+pub async fn open_relay_failing(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    check_id: Uuid,
+    detail: &str,
+) -> sqlx::Result<Option<Uuid>> {
+    open_for_check(conn, org_id, check_id, "relay_failing", detail, None).await
+}
+
+pub async fn resolve_relay_failing(
+    conn: &mut PgConnection,
+    check_id: Uuid,
+) -> sqlx::Result<Option<Resolved>> {
+    sqlx::query_as!(
+        Resolved,
+        "UPDATE incidents SET resolved_at = now()
+         WHERE check_id = $1 AND resolved_at IS NULL AND reason = 'relay_failing'
          RETURNING id, started_at",
         check_id,
     )

@@ -54,6 +54,25 @@
   {% if let Some(curl) = w.test_curl %}<pre class="snippet"><code>{{ curl }}</code></pre>{% endif %}
   {% endif %}
 </section>
+{% if let Some(to) = w.relay_to %}
+<section class="card">
+  <h2>Forwarding</h2>
+  <p>Accepted deliveries are passed on to <code>{{ to }}</code> with the same method, body and
+    headers, in the order they arrived. Each also carries:</p>
+  <ul class="list small-text">
+    <li><code>X-Monitor-Delivery</code>: an id that stays the same across retries, so you can ignore repeats</li>
+    <li><code>X-Monitor-Signature</code>: <code>sha256=</code> hex HMAC of <code>"{timestamp}.{body}"</code>, with
+      the timestamp in <code>X-Monitor-Timestamp</code>. Check this rather than the provider's own signature,
+      which may have expired by the time a retry arrives.</li>
+  </ul>
+  {% if let Some(secret) = w.relay_secret %}
+  <details>
+    <summary>Show the signing secret</summary>
+    <pre class="snippet"><code>{{ secret }}</code></pre>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
 {% else %}
 <section class="card">
   <h2>Ping URL</h2>

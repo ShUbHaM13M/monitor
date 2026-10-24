@@ -91,7 +91,7 @@ async fn overview_shows_what_is_down_and_why(db: PgPool) {
     let page = send(&app, get("/dashboard", Some(&cookie))).await;
     assert!(page.body.contains("verdict-down"));
     assert!(page.body.contains("1 down"));
-    assert!(page.body.contains("Down right now"));
+    assert!(page.body.contains("Needs attention"));
     assert!(page.body.contains("Job failed"));
     assert!(page.body.contains(&format!(r#"href="/checks/{backup}""#)));
     // Counts link to the filtered lists.
@@ -106,7 +106,7 @@ async fn overview_shows_what_is_down_and_why(db: PgPool) {
     // Recovery moves it to "Recently resolved".
     succeed(&app, &db, backup).await;
     let live = send(&app, htmx_get("/dashboard/live", &cookie, None)).await;
-    assert!(!live.body.contains("Down right now"));
+    assert!(!live.body.contains("Needs attention"));
     assert!(live.body.contains("Recently resolved"));
     assert!(live.body.contains("resolved"));
     assert!(!live.body.contains("<html"), "the poll gets a fragment");

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, signature_scheme, signature_header, signing_secret_enc\n         FROM checks WHERE token = $1 AND kind = 'webhook'",
+  "query": "SELECT id, signature_scheme, signature_header, signing_secret_enc, relay_url\n         FROM checks WHERE token = $1 AND kind = 'webhook'",
   "describe": {
     "columns": [
       {
@@ -46,6 +46,17 @@
             "name": "signing_secret_enc"
           }
         }
+      },
+      {
+        "ordinal": 4,
+        "name": "relay_url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "relay_url"
+          }
+        }
       }
     ],
     "parameters": {
@@ -57,8 +68,9 @@
       false,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "11d3ae79697e00a2694ccce8bf1ad313af1febbb98261c417200bda101c1c2f0"
+  "hash": "5db162dea17a14bcd2ac176ded296e92e400e221f14174a7b26ba009d64040b1"
 }

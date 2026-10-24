@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE incidents SET resolved_at = now()\n         WHERE check_id = $1 AND resolved_at IS NULL\n         RETURNING id, started_at",
+  "query": "UPDATE incidents SET resolved_at = now()\n         WHERE check_id = $1 AND resolved_at IS NULL AND reason = 'relay_failing'\n         RETURNING id, started_at",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "6e9dbdbb0cd86867e923535ebddbb8168544aa9967da4331500e565d15172d4e"
+  "hash": "bc3dfb9dd9b28d4446204edb191af8d1aef546a8789d0aa33a9f0702feb0514f"
 }

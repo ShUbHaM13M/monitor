@@ -24,6 +24,8 @@ pub(super) struct IncidentItem {
     pub(super) tag: &'static str,
     /// The check or monitor is paused, so it won't recover on its own.
     pub(super) paused: bool,
+    /// Forwarding trouble, not an outage of the thing itself.
+    pub(super) relay: bool,
     pub(super) reason: &'static str,
     pub(super) detail: String,
     pub(super) started: Stamp,
@@ -53,6 +55,7 @@ impl IncidentItem {
             name: i.target_name,
             tag,
             paused: i.target_status == "paused",
+            relay: i.reason == "relay_failing",
             reason: reason_label(&i.reason),
             detail: i.detail.unwrap_or_default(),
             started: Stamp::relative(i.started_at, now),

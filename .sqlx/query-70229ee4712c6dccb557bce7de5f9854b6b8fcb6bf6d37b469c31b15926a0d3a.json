@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM relay_deliveries WHERE finished_at < now() - make_interval(days => $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "70229ee4712c6dccb557bce7de5f9854b6b8fcb6bf6d37b469c31b15926a0d3a"
+}

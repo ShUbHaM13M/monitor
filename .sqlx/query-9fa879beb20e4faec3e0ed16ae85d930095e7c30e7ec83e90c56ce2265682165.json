@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE relay_deliveries\n                   SET status = CASE WHEN received_at < now() - make_interval(hours => $5) THEN 'failed' ELSE 'pending' END,\n                       finished_at = CASE WHEN received_at < now() - make_interval(hours => $5) THEN now() END,\n                       next_attempt_at = now() + make_interval(secs => $4),\n                       last_status = $2, last_error = $3\n                   WHERE id = $1\n                   RETURNING status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int2",
+        "Text",
+        "Float8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9fa879beb20e4faec3e0ed16ae85d930095e7c30e7ec83e90c56ce2265682165"
+}

@@ -7,6 +7,7 @@ pub mod notifications;
 pub mod orgs;
 pub mod overview;
 pub mod pings;
+pub mod relay;
 pub mod status_pages;
 pub mod user_tokens;
 pub mod users;

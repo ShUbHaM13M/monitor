@@ -35,6 +35,15 @@ pub struct CheckBody {
     channels: Option<Vec<Uuid>>,
     /// Webhook checks only. Omit `secret` on update to keep the stored one.
     signature: Option<SignatureBody>,
+    /// Webhook checks: forward deliveries here. Omitted keeps the current
+    /// setting; `null` turns forwarding off.
+    #[serde(default, deserialize_with = "present")]
+    relay_url: Option<Option<String>>,
+}
+
+/// Tells an absent field (`None`) from an explicit `null` (`Some(None)`).
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(d).map(Some)
 }
 
 /// `{"every": 3600}` or `{"cron": "0 2 * * *", "tz": "Europe/Berlin"}`.
@@ -64,6 +73,7 @@ pub struct CheckOut {
     grace: i32,
     max_runtime: Option<i32>,
     duration_alerts: bool,
+    relay_url: Option<String>,
     /// Where the job (or the sending service) calls.
     url: String,
     signature: Option<Value>,
@@ -92,6 +102,7 @@ impl CheckOut {
             grace: check.grace_secs,
             max_runtime: check.max_runtime_secs,
             duration_alerts: check.duration_alerts,
+            relay_url: check.relay_url.clone(),
             last_ping_at: check.last_ping_at,
             next_expected_at: check.next_expected_at,
             created_at: check.created_at,
@@ -154,7 +165,13 @@ async fn to_input(
             .collect(),
     };
     let signature = body.signature;
+    let relay_url = match (body.relay_url, existing) {
+        (Some(url), _) => url.unwrap_or_default(),
+        (None, Some(check)) => check.relay_url.clone().unwrap_or_default(),
+        (None, None) => String::new(),
+    };
     Ok(CheckInput {
+        relay_url,
         name: body.name,
         kind: body.kind.unwrap_or_else(|| "heartbeat".into()),
         schedule_kind: schedule_kind.into(),
@@ -223,7 +240,13 @@ pub async fn create(
     Body(body): Body<CheckBody>,
 ) -> Result<Response, ApiError> {
     let input = to_input(&state, key.org, body, None).await?;
-    let spec = parse_spec(&input, None, &state.secrets).map_err(ApiError::Invalid)?;
+    let spec = parse_spec(
+        &input,
+        None,
+        &state.secrets,
+        state.config.allow_private_targets,
+    )
+    .map_err(ApiError::Invalid)?;
     let limits = orgs::limits(&state.db, key.org, &state.config.plan).await?;
     let id = created(
         checks::create(&state.db, key.org, &spec, limits.max_checks).await,
@@ -249,7 +272,13 @@ pub async fn update(
 ) -> Result<Json<CheckOut>, ApiError> {
     let existing = load(&state, key.org, &id).await?;
     let input = to_input(&state, key.org, body, Some(&existing)).await?;
-    let spec = parse_spec(&input, Some(&existing), &state.secrets).map_err(ApiError::Invalid)?;
+    let spec = parse_spec(
+        &input,
+        Some(&existing),
+        &state.secrets,
+        state.config.allow_private_targets,
+    )
+    .map_err(ApiError::Invalid)?;
     if !checks::update(&state.db, key.org, existing.id, &spec).await? {
         return Err(ApiError::NotFound);
     }

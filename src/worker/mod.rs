@@ -1,5 +1,6 @@
 pub mod notifier;
 pub mod prober;
+pub mod relay;
 pub mod scheduler;
 
 use std::future::Future;
@@ -56,6 +57,17 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
         },
     ));
 
+    let st = state.clone();
+    tasks.spawn(periodic(
+        "relay",
+        Duration::from_secs(1),
+        shutdown.clone(),
+        move || {
+            let st = st.clone();
+            async move { relay::tick(&st).await.map(drop) }
+        },
+    ));
+
     let db = state.db.clone();
     tasks.spawn(periodic(
         "rollups",
@@ -90,6 +102,10 @@ pub async fn run(state: AppState, shutdown: CancellationToken) -> anyhow::Result
                 let deleted = pings::purge(&db).await?;
                 if deleted > 0 {
                     tracing::info!(deleted, "removed old pings");
+                }
+                let deleted = crate::db::relay::purge(&db).await?;
+                if deleted > 0 {
+                    tracing::info!(deleted, "removed old relayed webhooks");
                 }
                 let deleted = notifications::purge(&db).await?;
                 if deleted > 0 {

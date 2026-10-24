@@ -93,8 +93,8 @@ pub fn code_block(log: &str, max: usize) -> String {
 /// 0xRRGGBB for the event: red for trouble, green for recovery, amber for warnings.
 pub fn color(event: AlertEvent) -> u32 {
     match event {
-        AlertEvent::Down | AlertEvent::Fail => 0xD0_3B_3B,
-        AlertEvent::Up => 0x2F_9E_44,
+        AlertEvent::Down | AlertEvent::Fail | AlertEvent::RelayDown => 0xD0_3B_3B,
+        AlertEvent::Up | AlertEvent::RelayUp => 0x2F_9E_44,
         AlertEvent::Anomaly => 0xE0_A0_00,
     }
 }

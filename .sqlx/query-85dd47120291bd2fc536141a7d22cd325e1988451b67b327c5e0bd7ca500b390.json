@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE relay_deliveries d\n         SET status = 'failed', finished_at = now(), last_error = 'Skipped'\n         FROM checks c\n         WHERE d.id = $1 AND d.check_id = $2 AND c.id = d.check_id AND c.org_id = $3\n           AND d.status IN ('pending', 'sending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "85dd47120291bd2fc536141a7d22cd325e1988451b67b327c5e0bd7ca500b390"
+}

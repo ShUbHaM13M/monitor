@@ -279,7 +279,8 @@ pub struct PublicOutage {
 }
 
 /// Outages of the page's components overlapping `since..now`, newest first.
-/// One-off events (unusual run times) aren't outages and are left out.
+/// One-off events (unusual run times) and relay trouble (the org's own server,
+/// not the service) aren't outages and are left out.
 pub async fn outages(
     db: &PgPool,
     page_id: Uuid,
@@ -291,7 +292,7 @@ pub async fn outages(
          FROM incidents x
          JOIN status_page_items i
            ON (i.check_id = x.check_id OR i.monitor_id = x.monitor_id) AND i.page_id = $1
-         WHERE x.reason NOT IN ('slow_run', 'fast_run')
+         WHERE x.reason NOT IN ('slow_run', 'fast_run', 'relay_failing')
            AND (x.resolved_at IS NULL OR x.resolved_at > $2)
          ORDER BY x.started_at DESC",
         page_id,

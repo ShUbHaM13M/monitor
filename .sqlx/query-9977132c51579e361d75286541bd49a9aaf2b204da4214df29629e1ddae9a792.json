@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO relay_deliveries (check_id, method, headers, body, source_ip)\n         SELECT d.check_id, d.method, d.headers, d.body, d.source_ip\n         FROM relay_deliveries d\n         JOIN checks c ON c.id = d.check_id\n         WHERE d.id = $1 AND d.check_id = $2 AND c.org_id = $3 AND c.relay_url IS NOT NULL\n           AND d.status IN ('delivered', 'failed')\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9977132c51579e361d75286541bd49a9aaf2b204da4214df29629e1ddae9a792"
+}

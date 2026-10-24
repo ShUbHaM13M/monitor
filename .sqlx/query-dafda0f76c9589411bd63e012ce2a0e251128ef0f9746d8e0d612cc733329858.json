@@ -1,0 +1,120 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH heads AS (\n               SELECT DISTINCT ON (check_id) id\n               FROM relay_deliveries\n               WHERE status IN ('pending', 'sending')\n               ORDER BY check_id, id\n           ),\n           due AS (\n               SELECT d.id FROM relay_deliveries d\n               JOIN heads h ON h.id = d.id\n               JOIN checks c ON c.id = d.check_id\n               WHERE d.next_attempt_at <= now() AND c.relay_url IS NOT NULL\n               ORDER BY d.next_attempt_at\n               LIMIT $1\n               FOR UPDATE OF d SKIP LOCKED\n           )\n           UPDATE relay_deliveries d\n           SET status = 'sending', attempts = d.attempts + 1, last_attempt_at = now(),\n               next_attempt_at = now() + make_interval(secs => $2)\n           FROM due, checks c\n           WHERE d.id = due.id AND c.id = d.check_id\n           RETURNING d.id, d.check_id, c.relay_url AS \"url!\", c.relay_secret_enc AS secret_enc,\n                     d.method, d.headers, d.body, host(d.source_ip) AS source_ip, d.attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "check_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "check_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "url!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "relay_url"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "secret_enc",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "relay_secret_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "method",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "method"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "headers",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "headers"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "body",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "source_ip",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "attempts",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "relay_deliveries",
+            "name": "attempts"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "dafda0f76c9589411bd63e012ce2a0e251128ef0f9746d8e0d612cc733329858"
+}

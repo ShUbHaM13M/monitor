@@ -156,6 +156,30 @@ grace period and missed-ping alerts apply: "Stripe should hit us at least hourly
 - **Separate tokens:** a webhook token doesn't work on `/p/` and a ping token doesn't work
   on `/w/`, so the ping URL can't bypass verification.
 
+### Relay mode
+
+A webhook check can also **forward** what it receives. Set "Forward deliveries to" and point
+the provider at the check's `/w/{token}` URL instead of your server. Then:
+- **Storing.** Each accepted delivery is stored in full (up to 1 MB) before the provider gets
+  its `200`. Rejected signatures are never forwarded.
+- **Forwarding.** The delivery is passed on with its method, body and headers, without
+  cookies, `Authorization` or proxy headers. It also carries `X-Monitor-Delivery` (stable
+  across retries, so repeats can be ignored), `X-Monitor-Attempt`, `X-Forwarded-For`, and an
+  `X-Monitor-Signature` (`sha256=` HMAC of `"{X-Monitor-Timestamp}.{body}"`) made with a
+  per-check secret shown on the check page. The provider's own signature may have expired by
+  the time a retry arrives, so check ours.
+- **Order and retries.** Deliveries go out in order, at least once. Only each check's oldest
+  undelivered event is attempted, retried with backoff (30 s, doubling to an hour) for up to
+  24 hours. A struggling server gets one request at a time, and a delivery that keeps failing
+  can be skipped from the check page.
+- **Alerts.** After 3 failed attempts in a row, a *forwarding failing* incident opens and
+  alerts, separate from the check's own missed-webhook incident. The overview flags it. The
+  next success resolves it and sends a recovery.
+- **Backlog.** Past 10,000 waiting deliveries, new ones get `503` with `Retry-After`, so the
+  provider keeps them until the backlog clears.
+- **Retention.** Finished deliveries are kept 7 days and can be redelivered. Redelivering adds
+  a copy to the back of the queue. Turning forwarding off gives up on anything still waiting.
+
 ## Uptime monitors
 
 An HTTP monitor requests a URL every 30s to 1h. A check passes when:
@@ -276,7 +300,8 @@ How request bodies work:
 - **Units.** Durations are in seconds.
 - **Schedule.** `schedule` is either `{"every": 3600}` or `{"cron": "…", "tz": "…"}`.
 - **Check kinds.** A webhook check takes `"kind": "webhook"` plus
-  `"signature": {"scheme": "stripe", "secret": "…"}`.
+  `"signature": {"scheme": "stripe", "secret": "…"}`, and optionally `"relay_url"` (on update,
+  omit it to keep the current setting, or send `null` to turn forwarding off).
 - **Monitors.** Monitors take `url`, `method`, `interval` (30, 60, 300, 900, 1800 or 3600),
   `timeout`, `expected_status`, `body_contains`, `max_latency_ms`, `fail_threshold`, `headers`
   (an object) and `body`.

@@ -21,6 +21,11 @@
   <strong>{{ n }} down</strong>
   <span>{{ live.down_names() }}</span>
 </div>
+{% when Verdict::RelayFailing(n) %}
+<div class="verdict verdict-warn" role="status">
+  <strong>Forwarding is failing</strong>
+  <span>{{ n }} webhook relay{% if *n != 1 %}s{% endif %} can't reach your server; deliveries are queued. See below.</span>
+</div>
 {% when Verdict::AlertsAtRisk %}
 <div class="verdict verdict-warn" role="status">
   <strong>Everything is up</strong>
@@ -57,7 +62,7 @@
 
 {% if !live.open.is_empty() %}
 <section class="card">
-  <h2>Down right now</h2>
+  <h2>Needs attention</h2>
   {% let items = live.open.as_slice() %}
   {% include "partials/incident_table.html" %}
 </section>

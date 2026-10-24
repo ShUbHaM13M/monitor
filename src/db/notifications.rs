@@ -75,7 +75,7 @@ pub async fn enqueue_recovery(
         "INSERT INTO notifications (incident_id, channel_id, event, payload)
          SELECT DISTINCT $1::uuid, channel_id, $2, $3::jsonb
          FROM notifications
-         WHERE incident_id = $1 AND event IN ('down', 'fail')
+         WHERE incident_id = $1 AND event IN ('down', 'fail', 'relay_down')
          ON CONFLICT (incident_id, channel_id, event) DO NOTHING",
         incident_id,
         alert.event.as_str(),

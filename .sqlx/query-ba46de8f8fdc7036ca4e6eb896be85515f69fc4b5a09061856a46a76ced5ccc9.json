@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO incidents (id, org_id, check_id, reason, detail, cause_ping_id)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (check_id) WHERE resolved_at IS NULL DO NOTHING\n         RETURNING id",
+  "query": "INSERT INTO incidents (id, org_id, check_id, reason, detail, cause_ping_id)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (check_id, (reason = 'relay_failing')) WHERE resolved_at IS NULL DO NOTHING\n         RETURNING id",
   "describe": {
     "columns": [
       {
@@ -29,5 +29,5 @@
       false
     ]
   },
-  "hash": "9348ec6e7f4a63f57a748f5036ba4d81d72b479b3349b3682f3930df712ea01f"
+  "hash": "ba46de8f8fdc7036ca4e6eb896be85515f69fc4b5a09061856a46a76ced5ccc9"
 }

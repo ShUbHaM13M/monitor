@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM relay_deliveries d\n                   WHERE d.check_id = c.id AND d.status IN ('pending', 'sending')) AS \"queued!\",\n                  c.relay_failures AS failures, c.relay_secret_enc AS secret_enc\n           FROM checks c WHERE c.id = $1 AND c.org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "failures",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "relay_failures"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "secret_enc",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "checks",
+            "name": "relay_secret_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true
+    ]
+  },
+  "hash": "4fa4c395d7287ea692ae32b9ca2c56e46d826998109fcff4bc897397cca21ad5"
+}

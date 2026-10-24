@@ -13,14 +13,16 @@ use super::stamp::Stamp;
 use super::{AppError, AppState, Chrome, created, is_htmx, redirect};
 use crate::auth::CurrentUser;
 use crate::crypto::SecretBox;
-use crate::db::checks::{self, Check, CheckKind, CheckSpec, CheckStatus, SignatureSpec};
+use crate::db::checks::{self, Check, CheckKind, CheckSpec, CheckStatus, RelaySpec, SignatureSpec};
 use crate::db::incidents::{self, Incident};
 use crate::db::pings::{self, Ping};
+use crate::db::relay;
 use crate::db::{channels, orgs};
 use crate::domain::anomaly;
 use crate::domain::schedule::Schedule;
 use crate::domain::signature::Scheme;
 use crate::domain::time::{duration, span};
+use crate::notify::http::parse_url;
 
 const MAX_NAME: usize = 100;
 const MAX_GRACE_SECS: i64 = 30 * 24 * 60 * 60;
@@ -173,6 +175,8 @@ pub struct CheckInput {
     pub(super) signing_secret: String,
     /// "on" when ticked; absent (empty) when not.
     pub(super) duration_alerts: String,
+    /// Webhook checks: forward deliveries here; blank for none.
+    pub(super) relay_url: String,
 }
 
 struct FormView {
@@ -280,6 +284,7 @@ impl FormView {
                 signature_header: check.signature_header.clone().unwrap_or_default(),
                 signing_secret: String::new(),
                 duration_alerts: if check.duration_alerts { "on" } else { "" }.into(),
+                relay_url: check.relay_url.clone().unwrap_or_default(),
             },
             channels,
             error: None,
@@ -346,7 +351,12 @@ pub async fn create(
     headers: HeaderMap,
     Form(input): Form<CheckInput>,
 ) -> Result<Response, AppError> {
-    let result = match parse_spec(&input, None, &state.secrets) {
+    let result = match parse_spec(
+        &input,
+        None,
+        &state.secrets,
+        state.config.allow_private_targets,
+    ) {
         Ok(spec) => {
             let limits = orgs::limits(&state.db, user.org, &state.config.plan).await?;
             created(
@@ -400,7 +410,12 @@ pub async fn update(
     let existing = checks::get(&state.db, user.org, id)
         .await?
         .ok_or(AppError::NotFound)?;
-    match parse_spec(&input, Some(&existing), &state.secrets) {
+    match parse_spec(
+        &input,
+        Some(&existing),
+        &state.secrets,
+        state.config.allow_private_targets,
+    ) {
         Ok(spec) => {
             if !checks::update(&state.db, user.org, id, &spec).await? {
                 return Err(AppError::NotFound);
@@ -487,6 +502,7 @@ pub(super) fn parse_spec(
     input: &CheckInput,
     existing: Option<&Check>,
     secrets: &SecretBox,
+    allow_private: bool,
 ) -> Result<CheckSpec, String> {
     let kind = match (existing, input.kind.as_str()) {
         (Some(check), _) if check.is_webhook() => CheckKind::Webhook,
@@ -532,6 +548,15 @@ pub(super) fn parse_spec(
             .filter(|_| kind == CheckKind::Heartbeat)
             .map(|s| s as i32),
         duration_alerts: kind == CheckKind::Heartbeat && !input.duration_alerts.is_empty(),
+        relay: match (kind, input.relay_url.trim()) {
+            (CheckKind::Webhook, url) if !url.is_empty() => Some(RelaySpec {
+                url: parse_url(url, allow_private)
+                    .map_err(|e| format!("Forwarding address: {e}"))?
+                    .to_string(),
+                new_secret_enc: secrets.seal(relay::new_secret().as_bytes()),
+            }),
+            _ => None,
+        },
         channel_ids: selected_ids(input),
     })
 }
@@ -680,6 +705,7 @@ pub(super) fn reason_label(reason: &str) -> &'static str {
         "http_slow" => "Responding too slowly",
         "slow_run" => "Ran unusually long",
         "fast_run" => "Finished unusually fast",
+        "relay_failing" => "Forwarding failing",
         _ => "Down",
     }
 }
@@ -724,6 +750,80 @@ struct Activity {
     next_due: Stamp,
     pings: Vec<PingRow>,
     incidents: Vec<IncidentRow>,
+    relay: Option<RelayView>,
+}
+
+/// Forwarding health and recent deliveries, for relaying webhook checks.
+struct RelayView {
+    host: String,
+    queued: i64,
+    /// Failed attempts in a row; 0 when healthy.
+    failures: i32,
+    failing: bool,
+    deliveries: Vec<DeliveryView>,
+}
+
+struct DeliveryView {
+    id: i64,
+    method: String,
+    /// "delivered", "queued", "retrying", "failed".
+    state: &'static str,
+    css: &'static str,
+    attempts: i32,
+    received: Stamp,
+    response: String,
+    size: String,
+    /// What can be done: "redeliver" for finished ones, "skip" for the stuck head.
+    action: Option<&'static str>,
+}
+
+impl DeliveryView {
+    fn new(d: relay::DeliveryRow, head: Option<i64>, now: DateTime<Utc>) -> Self {
+        let (state, css) = match d.status.as_str() {
+            "delivered" => ("delivered", "pill-up"),
+            "failed" => ("gave up", "pill-down"),
+            _ if d.attempts > 0 => ("retrying", "pill-warn"),
+            _ => ("queued", "pill-muted"),
+        };
+        let response = match (&d.last_error, d.last_status) {
+            (Some(err), _) => err.clone(),
+            (None, Some(code)) => format!("HTTP {code}"),
+            (None, None) => "—".into(),
+        };
+        let response = if state == "retrying" {
+            format!(
+                "{response} · next {}",
+                relay::retry_text(d.next_attempt_at, now)
+            )
+        } else {
+            response
+        };
+        let action = match d.status.as_str() {
+            "delivered" | "failed" => Some("redeliver"),
+            _ if head == Some(d.id) && d.attempts > 0 => Some("skip"),
+            _ => None,
+        };
+        Self {
+            id: d.id,
+            method: d.method,
+            state,
+            css,
+            attempts: d.attempts,
+            received: Stamp::relative(d.received_at, now),
+            response,
+            size: bytes(d.size.into()),
+            action,
+        }
+    }
+}
+
+/// "812 B", "14.2 KB".
+fn bytes(n: i64) -> String {
+    if n < 1024 {
+        format!("{n} B")
+    } else {
+        format!("{:.1} KB", n as f64 / 1024.0)
+    }
 }
 
 struct Snippets {
@@ -741,10 +841,13 @@ struct WebhookSetup {
     signature_header: Option<String>,
     /// A test request; only sensible when unsigned.
     test_curl: Option<String>,
+    /// Forwarding destination and the secret its requests are signed with.
+    relay_to: Option<String>,
+    relay_secret: Option<String>,
 }
 
 impl WebhookSetup {
-    fn new(base_url: &str, check: &Check) -> Self {
+    fn new(base_url: &str, check: &Check, relay_secret: Option<String>) -> Self {
         let url = format!("{}/w/{}", base_url.trim_end_matches('/'), check.token);
         let scheme = check.signature_scheme.as_deref().and_then(Scheme::parse);
         Self {
@@ -760,6 +863,8 @@ impl WebhookSetup {
                 )
             }),
             url,
+            relay_to: check.relay_url.clone(),
+            relay_secret,
         }
     }
 }
@@ -813,6 +918,14 @@ pub async fn show(
     let check = checks::get(&state.db, user.org, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    let relay_secret = match &check.relay_url {
+        Some(_) => relay::health(&state.db, user.org, check.id)
+            .await?
+            .and_then(|h| h.secret_enc)
+            .and_then(|sealed| state.secrets.open(&sealed).ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok()),
+        None => None,
+    };
     let page = ShowPage {
         chrome: Chrome::signed_in(&user),
         id: check.id,
@@ -824,7 +937,7 @@ pub async fn show(
         snippets: Snippets::new(&state.config.base_url, &check),
         webhook: check
             .is_webhook()
-            .then(|| WebhookSetup::new(&state.config.base_url, &check)),
+            .then(|| WebhookSetup::new(&state.config.base_url, &check, relay_secret)),
         activity: activity(&state, &user, &check).await?,
     };
     Ok(Html(page.render()?))
@@ -878,7 +991,68 @@ async fn activity(
         next_due: next_due(check, now),
         pings: pings.into_iter().map(|p| PingRow::new(p, now)).collect(),
         incidents: incidents.into_iter().map(IncidentRow::new).collect(),
+        relay: relay_view(state, user, check, now).await?,
     })
+}
+
+const RECENT_DELIVERIES: i64 = 20;
+
+async fn relay_view(
+    state: &AppState,
+    user: &CurrentUser,
+    check: &Check,
+    now: DateTime<Utc>,
+) -> Result<Option<RelayView>, AppError> {
+    let Some(url) = &check.relay_url else {
+        return Ok(None);
+    };
+    let health = relay::health(&state.db, user.org, check.id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let rows = relay::recent(&state.db, user.org, check.id, RECENT_DELIVERIES).await?;
+    // The oldest unfinished delivery is the one being retried.
+    let head = rows
+        .iter()
+        .filter(|d| matches!(d.status.as_str(), "pending" | "sending"))
+        .map(|d| d.id)
+        .min();
+    Ok(Some(RelayView {
+        host: url::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_owned))
+            .unwrap_or_else(|| url.clone()),
+        queued: health.queued,
+        failures: health.failures,
+        failing: health.failures >= relay::FAILURES_BEFORE_ALERT,
+        deliveries: rows
+            .into_iter()
+            .map(|d| DeliveryView::new(d, head, now))
+            .collect(),
+    }))
+}
+
+pub async fn redeliver(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path((id, delivery)): Path<(Uuid, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    relay::redeliver(&state.db, user.org, id, delivery)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    Ok(redirect(&headers, &format!("/checks/{id}")))
+}
+
+pub async fn skip_delivery(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path((id, delivery)): Path<(Uuid, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    if !relay::skip(&state.db, user.org, id, delivery).await? {
+        return Err(AppError::NotFound);
+    }
+    Ok(redirect(&headers, &format!("/checks/{id}")))
 }
 
 // ───────────────────────────── actions ─────────────────────────────
@@ -948,7 +1122,7 @@ mod tests {
     }
 
     fn parse(input: &CheckInput) -> Result<CheckSpec, String> {
-        parse_spec(input, None, &secrets())
+        parse_spec(input, None, &secrets(), false)
     }
 
     fn webhook(scheme: &str, secret: &str) -> CheckInput {

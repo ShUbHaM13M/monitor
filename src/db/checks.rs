@@ -4,8 +4,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::channels;
 use super::orgs::{self, CreateError, Resource};
+use super::{channels, incidents, relay};
 use crate::auth::OrgId;
 use crate::domain::schedule::{Schedule, ScheduleError};
 
@@ -64,6 +64,8 @@ pub struct Check {
     pub has_secret: bool,
     /// Alert on unusually long or short runs.
     pub duration_alerts: bool,
+    /// Webhook checks: where accepted deliveries are forwarded.
+    pub relay_url: Option<String>,
 }
 
 impl Check {
@@ -109,6 +111,14 @@ pub struct SignatureSpec {
     pub secret_enc: Option<Vec<u8>>,
 }
 
+/// Forwarding for a webhook check.
+pub struct RelaySpec {
+    pub url: String,
+    /// A freshly generated, sealed signing secret: stored only if the check has
+    /// none yet (changing the URL keeps the secret).
+    pub new_secret_enc: Vec<u8>,
+}
+
 pub struct CheckSpec {
     /// Fixed at creation: `update` ignores it.
     pub kind: CheckKind,
@@ -118,6 +128,8 @@ pub struct CheckSpec {
     pub grace_secs: i32,
     pub max_runtime_secs: Option<i32>,
     pub duration_alerts: bool,
+    /// Webhook checks: forward deliveries here.
+    pub relay: Option<RelaySpec>,
     /// Channels that get this check's alerts.
     pub channel_ids: Vec<Uuid>,
 }
@@ -171,7 +183,8 @@ pub async fn list(db: &PgPool, org: OrgId) -> sqlx::Result<Vec<Check>> {
         r#"SELECT id, kind, name, token, schedule_kind, cron_expr, tz, period_secs, grace_secs,
                   max_runtime_secs, status AS "status: CheckStatus", last_ping_at,
                   last_start_at, next_expected_at, alert_after, created_at, signature_scheme,
-                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!", duration_alerts
+                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!", duration_alerts,
+                  relay_url
            FROM checks
            WHERE org_id = $1
            ORDER BY created_at"#,
@@ -187,7 +200,8 @@ pub async fn get(db: &PgPool, org: OrgId, id: Uuid) -> sqlx::Result<Option<Check
         r#"SELECT id, kind, name, token, schedule_kind, cron_expr, tz, period_secs, grace_secs,
                   max_runtime_secs, status AS "status: CheckStatus", last_ping_at,
                   last_start_at, next_expected_at, alert_after, created_at, signature_scheme,
-                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!", duration_alerts
+                  signature_header, signing_secret_enc IS NOT NULL AS "has_secret!", duration_alerts,
+                  relay_url
            FROM checks
            WHERE id = $1 AND org_id = $2"#,
         id,
@@ -211,8 +225,8 @@ pub async fn create(
         "INSERT INTO checks (id, org_id, project_id, kind, name, token, schedule_kind,
                              cron_expr, tz, period_secs, grace_secs, max_runtime_secs,
                              signature_scheme, signature_header, signing_secret_enc,
-                             duration_alerts)
-         SELECT $1, $2, p.id, $11, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15
+                             duration_alerts, relay_url, relay_secret_enc)
+         SELECT $1, $2, p.id, $11, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $17
          FROM projects p
          WHERE p.org_id = $2
          ORDER BY p.created_at
@@ -233,6 +247,8 @@ pub async fn create(
         spec.signature.as_ref().and_then(|s| s.header.clone()),
         spec.signature.as_ref().and_then(|s| s.secret_enc.clone()),
         spec.duration_alerts,
+        spec.relay.as_ref().map(|r| r.url.clone()),
+        spec.relay.as_ref().map(|r| r.new_secret_enc.clone()),
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -269,7 +285,13 @@ pub async fn update(db: &PgPool, org: OrgId, id: Uuid, spec: &CheckSpec) -> sqlx
              signature_scheme = $12, signature_header = $13,
              signing_secret_enc = CASE WHEN $12::text IS NULL THEN NULL
                                        ELSE COALESCE($14, signing_secret_enc) END,
-             duration_alerts = $15, updated_at = now()
+             duration_alerts = $15,
+             relay_url = $16,
+             relay_secret_enc = CASE WHEN $16::text IS NULL THEN NULL
+                                     ELSE COALESCE(relay_secret_enc, $17) END,
+             -- Stopping or redirecting the relay starts its failure count afresh.
+             relay_failures = CASE WHEN relay_url IS DISTINCT FROM $16 THEN 0 ELSE relay_failures END,
+             updated_at = now()
          WHERE id = $1 AND org_id = $2",
         id,
         org.get(),
@@ -286,9 +308,15 @@ pub async fn update(db: &PgPool, org: OrgId, id: Uuid, spec: &CheckSpec) -> sqlx
         spec.signature.as_ref().and_then(|s| s.header.clone()),
         spec.signature.as_ref().and_then(|s| s.secret_enc.clone()),
         spec.duration_alerts,
+        spec.relay.as_ref().map(|r| r.url.clone()),
+        spec.relay.as_ref().map(|r| r.new_secret_enc.clone()),
     )
     .execute(&mut *tx)
     .await?;
+    if spec.relay.is_none() {
+        relay::abandon_queue(&mut tx, id).await?;
+        incidents::resolve_relay_failing(&mut tx, id).await?;
+    }
     channels::set_for_check(&mut tx, org, id, &spec.channel_ids).await?;
     tx.commit().await?;
     Ok(true)

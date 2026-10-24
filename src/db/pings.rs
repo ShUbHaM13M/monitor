@@ -111,13 +111,15 @@ pub struct WebhookTarget {
     pub signature_scheme: Option<String>,
     pub signature_header: Option<String>,
     pub signing_secret_enc: Option<Vec<u8>>,
+    /// Set when accepted deliveries are forwarded (see `db::relay`).
+    pub relay_url: Option<String>,
 }
 
-/// The signature settings of a webhook monitor, by token.
+/// The signature and relay settings of a webhook monitor, by token.
 pub async fn webhook_target(db: &PgPool, token: &str) -> sqlx::Result<Option<WebhookTarget>> {
     sqlx::query_as!(
         WebhookTarget,
-        "SELECT id, signature_scheme, signature_header, signing_secret_enc
+        "SELECT id, signature_scheme, signature_header, signing_secret_enc, relay_url
          FROM checks WHERE token = $1 AND kind = 'webhook'",
         token,
     )

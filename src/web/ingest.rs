@@ -1,7 +1,7 @@
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
-use axum::http::{HeaderMap, Method, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
@@ -9,6 +9,7 @@ use super::client_ip::ClientIp;
 use super::ratelimit::too_many_plain;
 use super::{AppError, AppState};
 use crate::db::pings::{self, Endpoint, PingMeta};
+use crate::db::relay;
 use crate::domain::ping::{Signal, capture_headers, head_utf8, tail_utf8};
 use crate::domain::signature::{self, Scheme};
 
@@ -168,6 +169,35 @@ async fn webhook(
             format!("Rejected: {rejection}.\n"),
         )
             .into_response());
+    }
+    if target.relay_url.is_some() {
+        // Stored before answering: once the sender hears 200, the event is ours
+        // to deliver. A full backlog is refused instead, so the sender keeps it.
+        if relay::queue_full(&state.db, target.id).await? {
+            pings::record_rejected(&state.db, target.id, meta, "relay backlog full").await?;
+            let mut res = (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Relay backlog full; retry later.\n",
+            )
+                .into_response();
+            res.headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from_static("60"));
+            return Ok(res);
+        }
+        let forwarded: Vec<(String, String)> = headers
+            .iter()
+            .filter(|(name, _)| relay::forwardable(name.as_str()))
+            .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_owned())))
+            .collect();
+        relay::enqueue(
+            &state.db,
+            target.id,
+            method.as_str(),
+            &forwarded,
+            &body,
+            meta.source_ip.map(|ip| ip.to_string()),
+        )
+        .await?;
     }
     pings::record(
         &state.db,

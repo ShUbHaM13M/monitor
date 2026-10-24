@@ -11,7 +11,7 @@ const LOG_TAIL_LINES: usize = 30;
 const LOG_TAIL_BYTES: usize = 2000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum AlertEvent {
     /// Missed ping or hung run.
     Down,
@@ -21,6 +21,10 @@ pub enum AlertEvent {
     Up,
     /// A run took far longer, or far less time, than usual. The check is still up.
     Anomaly,
+    /// Forwarding webhook deliveries to the org's server keeps failing.
+    RelayDown,
+    /// Forwarding works again.
+    RelayUp,
 }
 
 impl AlertEvent {
@@ -31,6 +35,8 @@ impl AlertEvent {
             Self::Fail => "fail",
             Self::Up => "up",
             Self::Anomaly => "anomaly",
+            Self::RelayDown => "relay_down",
+            Self::RelayUp => "relay_up",
         }
     }
 }
@@ -157,15 +163,22 @@ impl Alert {
             AlertEvent::Fail => format!("❌ {} failed", self.source.name),
             AlertEvent::Up => format!("✅ {} is back up", self.source.name),
             AlertEvent::Anomaly => format!("⚠️ {}: unusual run time", self.source.name),
+            AlertEvent::RelayDown => format!("📭 {}: forwarding is failing", self.source.name),
+            AlertEvent::RelayUp => format!("📬 {}: forwarding recovered", self.source.name),
         }
     }
 
     /// One-line summary under the title.
     pub fn summary(&self) -> Option<String> {
-        if self.event == AlertEvent::Up {
+        if matches!(self.event, AlertEvent::Up | AlertEvent::RelayUp) {
             return self.down_since.map(|since| {
                 let down_for = (self.occurred_at - since).num_milliseconds().max(0);
-                format!("It was down for {}.", duration(down_for))
+                let what = if self.event == AlertEvent::RelayUp {
+                    "Forwarding was failing"
+                } else {
+                    "It was down"
+                };
+                format!("{what} for {}.", duration(down_for))
             });
         }
         match (&self.reason, &self.detail) {
@@ -286,6 +299,20 @@ mod tests {
         assert_eq!(a.source.name, "Backup");
         assert_eq!(a.source.url, "https://m.example/checks/x");
         assert_eq!(a.title(), "🚨 Backup is down");
+    }
+
+    #[test]
+    fn event_names_match_the_database() {
+        for event in [
+            AlertEvent::Down,
+            AlertEvent::Fail,
+            AlertEvent::Up,
+            AlertEvent::Anomaly,
+            AlertEvent::RelayDown,
+            AlertEvent::RelayUp,
+        ] {
+            assert_eq!(serde_json::to_value(event).unwrap(), event.as_str());
+        }
     }
 
     #[test]

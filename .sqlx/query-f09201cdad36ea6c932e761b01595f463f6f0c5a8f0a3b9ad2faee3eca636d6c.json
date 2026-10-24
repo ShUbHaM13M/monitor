@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT x.check_id, x.monitor_id, x.reason, x.started_at, x.resolved_at\n         FROM incidents x\n         JOIN status_page_items i\n           ON (i.check_id = x.check_id OR i.monitor_id = x.monitor_id) AND i.page_id = $1\n         WHERE x.reason NOT IN ('slow_run', 'fast_run')\n           AND (x.resolved_at IS NULL OR x.resolved_at > $2)\n         ORDER BY x.started_at DESC",
+  "query": "SELECT x.check_id, x.monitor_id, x.reason, x.started_at, x.resolved_at\n         FROM incidents x\n         JOIN status_page_items i\n           ON (i.check_id = x.check_id OR i.monitor_id = x.monitor_id) AND i.page_id = $1\n         WHERE x.reason NOT IN ('slow_run', 'fast_run', 'relay_failing')\n           AND (x.resolved_at IS NULL OR x.resolved_at > $2)\n         ORDER BY x.started_at DESC",
   "describe": {
     "columns": [
       {
@@ -73,5 +73,5 @@
       true
     ]
   },
-  "hash": "aec1e82e437d6c6339f5188c8c3cab21593069d32cdcdef30bda65608a5ab2bd"
+  "hash": "f09201cdad36ea6c932e761b01595f463f6f0c5a8f0a3b9ad2faee3eca636d6c"
 }

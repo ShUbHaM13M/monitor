@@ -115,6 +115,14 @@
     </label>
   </fieldset>
 
+  <label class="webhook-only"><span>Forward deliveries to <span class="muted">(optional)</span></span>
+    <input type="url" name="relay_url" value="{{ form.input.relay_url }}" placeholder="https://api.example.com/webhooks/stripe" class="mono">
+    <small class="muted">
+      Point the service at us and we pass every accepted delivery on to your server, in order,
+      retrying for up to 24 hours if it's down, and alert you when forwarding keeps failing.
+    </small>
+  </label>
+
   {% include "partials/channel_picker.html" %}
 
   <button type="submit" class="button">{{ form.submit }}</button>

@@ -8,6 +8,52 @@
     {% if let Some(typical) = activity.typical_run %}<div><span class="muted">Typical run</span>{{ typical }}</div>{% endif %}
   </section>
 
+  {% if let Some(relay) = activity.relay %}
+  <section class="card">
+    <div class="group-head">
+      <h2>Forwarding to {{ relay.host }}</h2>
+      {% if relay.failing %}
+      <span class="pill pill-down">failing</span>
+      {% else if relay.failures > 0 %}
+      <span class="pill pill-warn">retrying</span>
+      {% else %}
+      <span class="pill pill-up">healthy</span>
+      {% endif %}
+    </div>
+    <p class="muted small-text">
+      {{ relay.queued }} waiting{% if relay.failures > 0 %} · the last {{ relay.failures }} attempt{% if relay.failures != 1 %}s{% endif %} failed{% endif %}.
+      Deliveries are retried in order for up to 24 hours and kept for 7 days.
+    </p>
+    {% if relay.deliveries.is_empty() %}
+    <p class="muted">Nothing forwarded yet.</p>
+    {% else %}
+    <table class="table compact">
+      <thead><tr><th>#</th><th>Received</th><th>Result</th><th class="num">Tries</th><th>Last response</th><th class="num">Size</th><th></th></tr></thead>
+      <tbody>
+        {% for d in relay.deliveries %}
+        <tr>
+          <td class="mono">{{ d.id }}</td>
+          <td>{{ d.received|safe }}</td>
+          <td><span class="pill {{ d.css }}">{{ d.state }}</span></td>
+          <td class="num">{{ d.attempts }}</td>
+          <td class="muted small-text">{{ d.method }} · {{ d.response }}</td>
+          <td class="num">{{ d.size }}</td>
+          <td>
+            {% if let Some(action) = d.action %}
+            <form hx-post="/checks/{{ activity.id }}/relay/{{ d.id }}/{{ action }}" class="inline"
+                  {% if *action == "skip" %}hx-confirm="Give up on this delivery so the ones behind it can go?"{% endif %}>
+              <button type="submit" class="link">{% if *action == "skip" %}Skip{% else %}Redeliver{% endif %}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {% if !activity.incidents.is_empty() %}
   <section class="card">
     <h2>Incidents</h2>
