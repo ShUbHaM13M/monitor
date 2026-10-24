@@ -89,6 +89,35 @@
     document.title = down > 0 ? `(${down} down) ${baseTitle}` : baseTitle;
     const icon = document.querySelector('link[rel="icon"]');
     if (icon) icon.href = down > 0 ? "/static/favicon-down.svg" : "/static/favicon.svg";
+    // The collapsed mobile menu shows the count too.
+    const menuBadge = document.querySelector(".menu-badge");
+    if (menuBadge) {
+      menuBadge.textContent = String(down);
+      menuBadge.hidden = down === 0;
+    }
+  }
+
+  // ── Mobile menu ──
+  // On narrow screens the nav collapses behind a Menu button (see app.css).
+  function setupMenu() {
+    const toggle = document.querySelector(".menu-toggle");
+    const bar = toggle?.closest(".topbar");
+    if (!toggle || !bar) return;
+    const set = (open) => {
+      bar.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+    };
+    toggle.addEventListener("click", () => set(!bar.classList.contains("open")));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && bar.classList.contains("open")) {
+        set(false);
+        toggle.focus();
+      }
+    });
+    // Closing on outside taps keeps it from covering the page.
+    document.addEventListener("click", (e) => {
+      if (bar.classList.contains("open") && !bar.contains(e.target)) set(false);
+    });
   }
 
   // ── Polling etiquette ──
@@ -120,6 +149,7 @@
   }
 
   markNav();
+  setupMenu();
   // htmx.onLoad runs for the initial page and for every swapped-in fragment.
   if (window.htmx) {
     htmx.onLoad(enhance);

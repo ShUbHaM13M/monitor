@@ -268,7 +268,7 @@ a.small { font-size: 0.85rem; font-weight: 400; }
 .spark-dot { fill: var(--spark-ink); }
 .spark-end { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-top: 1rem; }
 .tile { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0; }
 .tile-label { color: var(--muted); font-size: 0.85rem; }
 .tile-value { font-size: 1.6rem; font-weight: 600; line-height: 1.2; }
@@ -443,3 +443,133 @@ a.small { font-size: 0.85rem; font-weight: 400; }
 .components-picker input[type="text"] { width: 100%; padding: 0.3rem 0.5rem; }
 .components-picker input.order { width: 4.5rem; padding: 0.3rem 0.5rem; text-align: right; }
 .form label.plain { display: inline; font-weight: 400; }
+
+/* ───────── scrolling tables & charts ───────── */
+
+/* Wide content scrolls inside its box instead of widening the page. A shadow
+   shows at an edge only while there's more to scroll that way: the covers
+   (`local`) move with the content and hide the shadows (`scroll`) at the ends. */
+.table-scroll {
+  max-width: 100%; overflow-x: auto; margin-top: 1.5rem; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right / 2.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.16), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.16), transparent) right / 0.75rem 100% no-repeat scroll,
+    var(--surface);
+}
+.table-scroll > .table { margin-top: 0; border: 0; border-radius: 0; background: transparent; }
+.card .table-scroll, details .table-scroll { margin-top: 0; border: 0; border-radius: 0; }
+.chart details .table-scroll, .component details .table-scroll { margin-top: 0.5rem; }
+.filters .table-scroll { margin-top: 0.75rem; }
+.chart-scroll { max-width: 100%; overflow-x: auto; }
+
+/* Form rows (number + unit) never push past their container. */
+.form .row > * { min-width: 0; }
+.form .row input, .form .row select { width: 100%; min-width: 0; }
+
+/* Fieldsets default to min-content width, so a wide table inside one would
+   widen the page; let it shrink and the table scroll instead. */
+fieldset { min-width: 0; }
+
+.menu-toggle { display: none; }
+.table td.num, .table th.num { white-space: nowrap; }
+.pill, .tag, .table time { white-space: nowrap; }
+
+/* ───────── collapsed navigation (tablets and phones) ───────── */
+
+@media (max-width: 900px) {
+  /* Navigation: brand and a Menu button; the links fold out below. Without
+     scripts (no `js` class) they simply wrap, as on wide screens. */
+  .topbar { padding: 0.6rem 1rem; gap: 0.5rem; }
+  .js .menu-toggle {
+    display: inline-flex; align-items: center; gap: 0.5rem; min-height: 40px;
+    padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .menu-icon, .menu-icon::before, .menu-icon::after {
+    display: block; width: 16px; height: 2px; border-radius: 1px; background: currentColor;
+  }
+  .menu-icon { position: relative; }
+  .menu-icon::before, .menu-icon::after { content: ""; position: absolute; left: 0; }
+  .menu-icon::before { top: -5px; }
+  .menu-icon::after { top: 5px; }
+  .topbar.open .menu-icon { background: transparent; }
+  .topbar.open .menu-icon::before { top: 0; transform: rotate(45deg); }
+  .topbar.open .menu-icon::after { top: 0; transform: rotate(-45deg); }
+  .menu-badge {
+    min-width: 1.3em; padding: 0 0.35rem; border-radius: 999px; background: var(--down);
+    color: var(--surface); font-size: 0.75rem; font-weight: 700; line-height: 1.5; text-align: center;
+  }
+  .menu-badge[hidden] { display: none; }
+
+  .js .topbar:has(.menu-toggle) nav { display: none; }
+  .js .topbar.open nav {
+    display: flex; flex-direction: column; align-items: stretch; gap: 0;
+    width: 100%; margin-top: 0.25rem;
+  }
+  .topbar.open nav > a, .topbar.open nav > .account, .topbar.open nav > form {
+    display: block; padding: 0.75rem 0.25rem; border-top: 1px solid var(--border);
+  }
+  .topbar.open nav > .account { max-width: none; }
+  .topbar.open nav button.link { display: block; width: 100%; text-align: left; }
+
+}
+
+/* ───────── small screens ───────── */
+
+@media (max-width: 760px) {
+  .container { padding: 1.25rem 1rem 2rem; }
+  .page-head h1, h1 { font-size: 1.5rem; }
+  .card { padding: 0.9rem 1rem; }
+  .banner { padding: 0.5rem 1rem; font-size: 0.9rem; }
+
+  /* Tables keep one line per value and scroll sideways; long text wraps. */
+  .table th, .table td { padding: 0.5rem 0.6rem; white-space: nowrap; }
+  .table td.wrap { white-space: normal; min-width: 14rem; }
+  .table details pre { max-width: 75vw; }
+
+  /* Charts keep a legible size and scroll. */
+  .chart-scroll > svg { min-width: 560px; }
+
+  /* 16px inputs: iOS zooms the page on focus for anything smaller. */
+  .form input, .form select, .form textarea, .filters input[type="search"],
+  .components-picker input { font-size: 16px; }
+  .form fieldset.choice { flex-direction: column; gap: 0.5rem; }
+  .form label.radio { align-items: flex-start; }
+  .form label.radio input { margin-top: 0.3rem; }
+  .form fieldset.choice label.radio { display: block; }
+  .form fieldset.choice label.radio input { margin: 0 0.45rem 0 0; vertical-align: -1px; }
+  .status-form .prefixed { flex-wrap: wrap; }
+
+  /* The components picker stacks: tick and name, then public name and order. */
+  .picker-scroll { overflow: visible; background: none; }
+  .picker thead { display: none; }
+  .picker, .picker tbody { display: block; }
+  .picker tr {
+    display: grid; grid-template-columns: 2rem 1fr 5rem; gap: 0.35rem 0.6rem;
+    grid-template-areas: "show target target" ". name order";
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+  }
+  .picker td { display: block; padding: 0; border: 0; white-space: normal; }
+  .picker .pick-show { grid-area: show; padding-top: 0.15rem; }
+  .picker .pick-target { grid-area: target; }
+  .picker .pick-name { grid-area: name; }
+  .picker .pick-order { grid-area: order; text-align: left; }
+  .picker td[data-label]::before {
+    content: attr(data-label); display: block; margin-bottom: 0.15rem;
+    color: var(--muted); font-size: 0.75rem;
+  }
+  .picker input[type="text"], .picker input.order { width: 100%; min-width: 0; }
+  .status-form .prefixed .muted { overflow-wrap: anywhere; }
+
+  .button { padding: 0.55rem 0.9rem; }
+  .stats { gap: 0.75rem 1.75rem; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .tile-value { font-size: 1.3rem; }
+  .verdict { padding: 0.75rem 1rem; }
+  .verdict strong { font-size: 1.05rem; }
+  p code, li code, .muted .mono { overflow-wrap: anywhere; }
+  .component-head { flex-wrap: wrap; gap: 0.25rem 1rem; }
+}

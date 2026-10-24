@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Monitor{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  {# Marks the page as scripted before it renders, so the collapsed mobile menu
+     doesn't flash open. Blocking but tiny; external because of the CSP. #}
+  <script src="/static/early.js"></script>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   {# Swap 422/429 responses so errors render in place (htmx skips 4xx by default). No eval,
      inline scripts or injected styles: the Content-Security-Policy forbids them. #}
@@ -15,7 +18,12 @@
 <body{% if !chrome.csrf.is_empty() %} hx-headers='{"X-CSRF-Token": "{{ chrome.csrf }}"}'{% endif %}>
   <header class="topbar">
     <a class="brand" href="/">◉ Monitor</a>
-    <nav>
+    {% if chrome.user.is_some() %}
+    <button type="button" class="menu-toggle" aria-expanded="false" aria-controls="site-nav">
+      <span class="menu-icon" aria-hidden="true"></span>Menu<span class="menu-badge" hidden></span>
+    </button>
+    {% endif %}
+    <nav id="site-nav" aria-label="Main">
       {% if let Some(user) = chrome.user %}
         <a href="/dashboard" data-nav="/dashboard">Overview
           {# Fills in after load and refreshes itself; see partials/health.html. #}

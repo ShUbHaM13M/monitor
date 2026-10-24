@@ -40,7 +40,7 @@
   {% if deliveries.is_empty() %}
   <p class="muted">Nothing sent yet.</p>
   {% else %}
-  <table class="table">
+  <div class="table-scroll"><table class="table">
     <thead><tr><th>Status</th><th>Event</th><th>Source</th><th>When</th><th>Attempts</th><th>Error</th></tr></thead>
     <tbody>
       {% for d in deliveries %}
@@ -50,11 +50,11 @@
         <td>{{ d.source_name }}</td>
         <td>{{ d.when }}</td>
         <td>{{ d.attempts }}</td>
-        <td class="muted">{% if let Some(e) = d.error %}{{ e }}{% endif %}</td>
+        <td class="muted wrap">{% if let Some(e) = d.error %}{{ e }}{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% endif %}
 </section>
 {% endblock %}

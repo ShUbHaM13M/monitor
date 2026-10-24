@@ -15,7 +15,7 @@
   <a href="/channels/new" class="button">Add your first channel</a>
 </section>
 {% else %}
-<table class="table">
+<div class="table-scroll"><table class="table">
   <thead>
     <tr><th>Name</th><th>Type</th><th>Destination</th><th>Used by</th><th>Last alert</th></tr>
   </thead>
@@ -33,6 +33,6 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endif %}
 {% endblock %}

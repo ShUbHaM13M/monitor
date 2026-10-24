@@ -18,7 +18,7 @@
   <a href="/status-pages/new" class="button">Create a status page</a>
 </section>
 {% else %}
-<table class="table">
+<div class="table-scroll"><table class="table">
   <thead><tr><th>Page</th><th>Address</th><th class="num">Components</th><th>State</th><th></th></tr></thead>
   <tbody>
     {% for p in pages %}
@@ -37,6 +37,6 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endif %}
 {% endblock %}

@@ -33,7 +33,7 @@
           {% endif %}
         </span>
       </figcaption>
-      <svg viewBox="0 0 {{ c.width }} {{ c.height }}" width="100%" role="img"
+      <div class="chart-scroll"><svg viewBox="0 0 {{ c.width }} {{ c.height }}" width="100%" role="img"
            aria-label="Response time per hour over the last 24 hours, average and 95th percentile. A table follows.">
         {% for t in c.y_ticks %}
         <line x1="{{ c.plot_left }}" x2="{{ c.plot_right }}" y1="{{ t.pos }}" y2="{{ t.pos }}" class="{% if loop.first %}baseline{% else %}grid{% endif %}"/>
@@ -58,17 +58,17 @@
           <line x1="{{ col.center }}" x2="{{ col.center }}" y1="{{ c.plot_top }}" y2="{{ c.plot_bottom }}" class="crosshair"/>
         </g>
         {% endfor %}
-      </svg>
+      </svg></div>
       <details>
         <summary>Show as table</summary>
-        <table class="table">
+        <div class="table-scroll"><table class="table">
           <thead><tr><th>Hour</th><th class="num">Average</th><th class="num">p95</th><th class="num">Checks</th><th class="num">Failed</th></tr></thead>
           <tbody>
             {% for col in c.columns %}{% if col.checks > 0 %}
             <tr><td>{{ col.hour }}</td><td class="num">{{ col.avg }}</td><td class="num">{{ col.p95 }}</td><td class="num">{{ col.checks }}</td><td class="num">{{ col.failed }}</td></tr>
             {% endif %}{% endfor %}
           </tbody>
-        </table>
+        </table></div>
       </details>
     </figure>
     {% else %}
@@ -97,7 +97,7 @@
     {% if activity.results.is_empty() %}
     <p class="muted">No checks yet. The first one runs within one interval, or use “Check now”.</p>
     {% else %}
-    <table class="table">
+    <div class="table-scroll"><table class="table">
       <thead><tr><th>Result</th><th>When</th><th class="num">Status</th><th class="num">Response time</th><th>Error</th></tr></thead>
       <tbody>
         {% for r in activity.results %}
@@ -106,11 +106,11 @@
           <td>{{ r.when|safe }}</td>
           <td class="num">{{ r.status }}</td>
           <td class="num">{{ r.latency }}</td>
-          <td class="muted">{{ r.error }}</td>
+          <td class="muted wrap">{{ r.error }}</td>
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </section>
 </div>

@@ -27,7 +27,7 @@
     {% if relay.deliveries.is_empty() %}
     <p class="muted">Nothing forwarded yet.</p>
     {% else %}
-    <table class="table compact">
+    <div class="table-scroll"><table class="table compact">
       <thead><tr><th>#</th><th>Received</th><th>Result</th><th class="num">Tries</th><th>Last response</th><th class="num">Size</th><th></th></tr></thead>
       <tbody>
         {% for d in relay.deliveries %}
@@ -36,7 +36,7 @@
           <td>{{ d.received|safe }}</td>
           <td><span class="pill {{ d.css }}">{{ d.state }}</span></td>
           <td class="num">{{ d.attempts }}</td>
-          <td class="muted small-text">{{ d.method }} · {{ d.response }}</td>
+          <td class="muted small-text wrap">{{ d.method }} · {{ d.response }}</td>
           <td class="num">{{ d.size }}</td>
           <td>
             {% if let Some(action) = d.action %}
@@ -49,7 +49,7 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </section>
   {% endif %}
@@ -74,7 +74,7 @@
     {% if activity.pings.is_empty() %}
     <p class="muted">Nothing yet. The check stays <em>new</em> until the first {% if activity.is_webhook %}delivery{% else %}ping{% endif %} arrives.</p>
     {% else %}
-    <table class="table">
+    <div class="table-scroll"><table class="table">
       <thead><tr><th>{% if activity.is_webhook %}Result{% else %}Signal{% endif %}</th><th>When</th><th>Duration</th><th>Source</th><th>{% if activity.is_webhook %}Payload{% else %}Output{% endif %}</th></tr></thead>
       <tbody>
         {% for ping in activity.pings %}
@@ -85,7 +85,7 @@
           <td class="muted" title="{% if let Some(ua) = ping.user_agent %}{{ ua }}{% endif %}">
             {% if let Some(ip) = ping.source_ip %}{{ ip }}{% endif %}
           </td>
-          <td class="delivery">
+          <td class="delivery wrap">
             {% if let Some(note) = ping.note %}<div class="note">{{ note }}</div>{% endif %}
             {% if let Some(headers) = ping.headers %}
             <details>
@@ -101,7 +101,7 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </section>
 </div>

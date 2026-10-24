@@ -30,19 +30,19 @@
     {% if form.rows.is_empty() %}
     <p class="muted">No checks or monitors yet. <a href="/checks/new">Create a check</a> or <a href="/monitors/new">a monitor</a> first.</p>
     {% else %}
-    <table class="table compact">
+    <div class="table-scroll picker-scroll"><table class="table compact picker">
       <thead><tr><th>Show</th><th>Check or monitor</th><th>Public name</th><th class="num">Order</th></tr></thead>
       <tbody>
         {% for r in form.rows %}
         <tr>
-          <td><input type="checkbox" name="show.{{ r.key }}" id="show-{{ r.key }}" {% if r.shown %}checked{% endif %}></td>
-          <td><label for="show-{{ r.key }}" class="plain">{{ r.internal_name }}</label><span class="tag">{{ r.kind }}</span></td>
-          <td><input type="text" name="name.{{ r.key }}" value="{{ r.display_name }}" maxlength="100" aria-label="Public name for {{ r.internal_name }}"></td>
-          <td class="num"><input type="number" name="pos.{{ r.key }}" value="{{ r.position }}" class="order" aria-label="Order for {{ r.internal_name }}"></td>
+          <td class="pick-show"><input type="checkbox" name="show.{{ r.key }}" id="show-{{ r.key }}" {% if r.shown %}checked{% endif %}></td>
+          <td class="pick-target"><label for="show-{{ r.key }}" class="plain">{{ r.internal_name }}</label><span class="tag">{{ r.kind }}</span></td>
+          <td class="pick-name" data-label="Public name"><input type="text" name="name.{{ r.key }}" value="{{ r.display_name }}" maxlength="100" aria-label="Public name for {{ r.internal_name }}"></td>
+          <td class="num pick-order" data-label="Order"><input type="number" name="pos.{{ r.key }}" value="{{ r.position }}" class="order" aria-label="Order for {{ r.internal_name }}"></td>
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </fieldset>
 

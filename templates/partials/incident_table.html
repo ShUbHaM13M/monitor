@@ -1,4 +1,4 @@
-<table class="table incident-table">
+<div class="table-scroll"><table class="table incident-table">
   <thead><tr><th>Status</th><th>What</th><th>Reason</th><th>Started</th><th class="num">Duration</th></tr></thead>
   <tbody>
     {% for i in items %}
@@ -8,10 +8,10 @@
         <a href="{{ i.href }}">{{ i.name }}</a><span class="tag">{{ i.tag }}</span>
         {% if i.paused && i.open %}<div class="muted small-text">paused, so it won't recover by itself</div>{% endif %}
       </td>
-      <td>{{ i.reason }}{% if !i.detail.is_empty() %}<div class="muted small-text">{{ i.detail }}</div>{% endif %}</td>
+      <td class="wrap">{{ i.reason }}{% if !i.detail.is_empty() %}<div class="muted small-text">{{ i.detail }}</div>{% endif %}</td>
       <td>{{ i.started|safe }}</td>
       <td class="num">{{ i.duration }}</td>
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>

@@ -27,12 +27,12 @@
     {% if !c.bad_days.is_empty() %}
     <details class="small-text">
       <summary>{{ c.bad_days.len() }} day{% if c.bad_days.len() != 1 %}s{% endif %} with downtime</summary>
-      <table class="table compact">
+      <div class="table-scroll"><table class="table compact">
         <thead><tr><th>Day (UTC)</th><th class="num">Downtime</th><th class="num">Uptime</th></tr></thead>
         <tbody>
           {% for (day, down, up) in c.bad_days %}<tr><td>{{ day }}</td><td class="num">{{ down }}</td><td class="num">{{ up }}</td></tr>{% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </details>
     {% endif %}
   </div>
